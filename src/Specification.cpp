@@ -199,13 +199,13 @@ Specification::Specification(char *specFile)
 
   Options.TargetInstancesThreshold = 100;
   Options.FrequencyRatioThreshold = 1.0;
-  Options.FoldChangeThreshold = 1;
+  Options.FoldChangeThreshold = 1.0;
   Options.PValueThreshold = 0.05;
 
   Options.DimerMotifFlanks = 5;
   Options.ClusteringByIdentity = true;
   Options.ClusteringAcrossDatasets = true;
-  Options.ClusteringDistanceConstant = 0;
+  Options.ClusteringDistanceConstant = 0.0;
   Options.ClusteringDistanceMultiplier = 0.15;
   Options.ClusteringOverlapThreshold = 0.2;
 
