@@ -198,6 +198,7 @@ Specification::Specification(char *specFile)
   Options.ConsiderMostSignificantComplexOnly = false;
 
   Options.TargetInstancesThreshold = 100;
+  Options.FrequencyRatioThreshold = 1.0;
   Options.FoldChangeThreshold = 1;
   Options.PValueThreshold = 0.05;
 
@@ -362,6 +363,7 @@ Specification::Specification(char *specFile)
       if (strcasecmp(key, "ConsiderMostSignificantComplexOnly") == 0) { scan_bool(value, Options.ConsiderMostSignificantComplexOnly); continue; }
 
       if (strcasecmp(key, "TargetInstancesThreshold") == 0) { scan_int(value, Options.TargetInstancesThreshold); continue; }
+      if (strcasecmp(key, "FrequencyRatioThreshold") == 0) { scan_double(value, Options.FrequencyRatioThreshold); continue; }
       if (strcasecmp(key, "FoldChangeThreshold") == 0) { scan_double(value, Options.FoldChangeThreshold); continue; }
       if (strcasecmp(key, "PValueThreshold") == 0) { scan_double(value, Options.PValueThreshold); continue; }
 

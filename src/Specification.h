@@ -78,7 +78,7 @@ class Specification
       bool ConsiderOrientationsSeparately, ConsiderMostSignificantComplexOnly;
 
       int TargetInstancesThreshold;
-      double FoldChangeThreshold, PValueThreshold;
+      double FrequencyRatioThreshold, FoldChangeThreshold, PValueThreshold;
 
       int DimerMotifFlanks;
       bool ClusteringByIdentity, ClusteringAcrossDatasets;
