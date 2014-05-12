@@ -1,0 +1,60 @@
+     TACO: Transcription factor Association from Complex Overrepresentation
+
+Overview
+
+   TACO, or Transcription factor Association from Complex Overrepresentation,
+   is a program to predict overrepresented motif complexes in any genome-wide
+   set of regulatory regions.
+
+   See http://bioputer.mimuw.edu.pl/taco/ for the latest version.
+
+Installation instructions
+
+   TACO is written in C++ and should run on any Unix-like operating system,
+   such as Linux and Mac OS X. To compile it, run make. After a successful
+   compilation, the executable file src/taco could be copied to a system-wide
+   directory, such as /usr/local/bin.
+
+   TACO makes use of the standalone R math library (libRmath). If you
+   encounter `fatal error: Rmath.h: No such file or directory', install the
+   package named either libRmath-devel or r-mathlib (depending on the system
+   distribution). Note that providing only the Rmath.h (or path to it) will
+   not be sufficient. If you encounter any problems with the compilation,
+   first check if you have libRmath.so properly installed; usually it is
+   found in /usr/lib or /usr/lib64.
+
+Example specifications
+
+   In the release package, a few example specification files are provided. To
+   repeat the analyses, you will need:
+
+     * the reference [1]human (hg19) genome (FASTA format)
+     * a motif database – use either [2]TRANSFAC (commercial), [3]JASPAR or
+       [4]SwissRegulon
+     * a list of input datasets (narrowPeak or BED format).
+
+   We provide example lists of UW and Duke open chromatin datasets, as well
+   as the respective URLs of narrowPeak files to be downloaded from the
+   [5]ENCODE Project. To download the latter ones, go to the
+   wgEncodeUwDnase_hg19 or wgEncodeOpenChromDnase_hg19 subdirectory and run
+   wget -i urls.list.
+
+   We also provide example list of K562 ChIP-seq peaks, and the respective
+   URLs, in similar manner. To repeat this analysis, for each dataset you
+   will also need the top 5 motifs found in ChIP-seq peaks using [6]MEME.
+   They can be downloaded from [7]Factorbook or generated locally.
+
+Contact
+
+   If you have any questions or comments, please contact Aleksander
+   Jankowski <ajank@mimuw.edu.pl>.
+
+References
+
+   1. http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips/chromFa.tar.gz
+   2. http://www.biobase-international.com/product/transcription-factor-binding-sites
+   3. http://jaspar.genereg.net/
+   4. http://swissregulon.unibas.ch/
+   5. http://genome.ucsc.edu/ENCODE/
+   6. http://meme.nbcr.net/meme/
+   7. http://www.factorbook.org/
