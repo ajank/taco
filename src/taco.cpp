@@ -36,7 +36,7 @@
 using namespace std;
 
 const string lead = "TACO -- Transcription factor Association from Complex Overrepresentation";
-const string version = "Version 1.0 (svn-devel)"; // 1.0 was dated 2013-10-08
+const string version = "Version 1.0 (git-devel)"; // 1.0 was dated 2013-10-08
 
 Genome fa;
 double GC_content;
