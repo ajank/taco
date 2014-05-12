@@ -241,7 +241,7 @@ void readMotifDatabase(map<string, int> &accessions, vector<PositionWeightMatrix
   {
     while (true)
     {
-      PositionWeightMatrix motif = PositionWeightMatrix(GC_content, f, fname, &lineNum);
+      PositionWeightMatrix motif = PositionWeightMatrix(GC_content, f, fname, &lineNum, section.Pseudocounts);
 
       if (!section.MotifSubset.empty() && subset.find(motif.accession) == subset.end()) continue;
 
@@ -257,7 +257,7 @@ void readMotifDatabase(map<string, int> &accessions, vector<PositionWeightMatrix
 
 void readMotif(map<string, int> &accessions, vector<PositionWeightMatrix> &motifs, Specification::MotifsSection &section, const string accession, const char *fname)
 {
-  PositionWeightMatrix motif = PositionWeightMatrix(GC_content, fname, accession);
+  PositionWeightMatrix motif = PositionWeightMatrix(GC_content, fname, accession, section.Pseudocounts);
   fixMotifAccession(accessions, motif);
   motif.estimateThreshold(section.Sensitivity);
   motifs.push_back(motif);

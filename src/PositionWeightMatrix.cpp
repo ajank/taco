@@ -35,7 +35,6 @@
 #define FORMAT_MEME 3
 
 const int score_samples = 1000;
-const double pseudocounts = 0.05;
 
 #define nti(nucleotide) Genome::nucleotideToIndex(nucleotide)
 
@@ -61,7 +60,7 @@ PositionWeightMatrix::PositionWeightMatrix(double GC_content)
   initialize(GC_content);
 }
 
-PositionWeightMatrix::PositionWeightMatrix(double GC_content, const char *fname, const string &accession)
+PositionWeightMatrix::PositionWeightMatrix(double GC_content, const char *fname, const string &accession, double pseudocounts)
 {
   initialize(GC_content);
   if (accession != "") name = accession;
@@ -76,7 +75,7 @@ PositionWeightMatrix::PositionWeightMatrix(double GC_content, const char *fname,
 
   try
   {
-    readPWM(f, fname, &lineNum);
+    readPWM(f, fname, &lineNum, pseudocounts);
   }
   catch (PositionWeightMatrix::EndOfFile &e)
   {
@@ -89,13 +88,13 @@ PositionWeightMatrix::PositionWeightMatrix(double GC_content, const char *fname,
   if (accession != "") this->accession = accession;
 }
 
-PositionWeightMatrix::PositionWeightMatrix(double GC_content, FILE *f, const char *fname, int *lineNum)
+PositionWeightMatrix::PositionWeightMatrix(double GC_content, FILE *f, const char *fname, int *lineNum, double pseudocounts)
 {
   initialize(GC_content);
-  readPWM(f, fname, lineNum);
+  readPWM(f, fname, lineNum, pseudocounts);
 }
 
-void PositionWeightMatrix::readPWM(FILE *f, const char *fname, int *lineNum)
+void PositionWeightMatrix::readPWM(FILE *f, const char *fname, int *lineNum, double pseudocounts)
 {
   PWM.clear();
   char line[1024];

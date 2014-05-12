@@ -59,7 +59,7 @@ class Specification
     {
       vector<string> MotifDatabase, MotifSubset;
       vector<pair<string, string> > Motif;
-      double Sensitivity;
+      double Pseudocounts, Sensitivity;
     };
     vector<MotifsSection> Motifs;
 

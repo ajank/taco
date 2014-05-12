@@ -58,8 +58,8 @@ class PositionWeightMatrix
     vector<MotifMatch> matches;
 
     PositionWeightMatrix(double GC_content = 0.25);
-    PositionWeightMatrix(double GC_content, const char *fname, const string &accession = "");
-    PositionWeightMatrix(double GC_content, FILE *f, const char *fname, int *lineNum);
+    PositionWeightMatrix(double GC_content, const char *fname, const string &accession = "", double pseudocounts = 0.0);
+    PositionWeightMatrix(double GC_content, FILE *f, const char *fname, int *lineNum, double pseudocounts = 0.0);
     class EndOfFile : exception {};
 
     int addPosition(NucleotideValues fd, double pseudocounts = 0.0);
@@ -72,7 +72,7 @@ class PositionWeightMatrix
 
   protected:
     void initialize(double GC_content);
-    void readPWM(FILE *f, const char *fname, int *lineNum);
+    void readPWM(FILE *f, const char *fname, int *lineNum, double pseudocounts = 0.0);
 };
 
 #endif

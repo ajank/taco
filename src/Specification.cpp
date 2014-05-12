@@ -276,6 +276,7 @@ Specification::Specification(char *specFile)
         if (context.size() == 1 && context.front() == "Motifs")
         {
           Motifs.push_back(MotifsSection());
+          Motifs.back().Pseudocounts = 0.05;
           Motifs.back().Sensitivity = 0.9;
           continue;
         }
@@ -338,6 +339,7 @@ Specification::Specification(char *specFile)
       if (strcasecmp(key, "Database") == 0) { push_back_wordexp(value, Motifs.back().MotifDatabase); continue; }
       if (strcasecmp(key, "DatabaseSubset") == 0) { push_back_wordexp(value, Motifs.back().MotifSubset); continue; }
       if (strcasecmp(key, "Motif") == 0) { scan_Dataset(value, Motifs.back().Motif); continue; }
+      if (strcasecmp(key, "Pseudocounts") == 0) { scan_double(value, Motifs.back().Pseudocounts); continue; }
       if (strcasecmp(key, "Sensitivity") == 0) { scan_double(value, Motifs.back().Sensitivity); continue; }
     }
 
