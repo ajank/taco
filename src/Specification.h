@@ -81,9 +81,10 @@ class Specification
       double FoldChangeThreshold, PValueThreshold;
 
       int DimerMotifFlanks;
-      bool ClusteringAcrossDatasets;
+      bool ClusteringByIdentity, ClusteringAcrossDatasets;
       double ClusteringDistanceConstant, ClusteringDistanceMultiplier, ClusteringOverlapThreshold;
 
+      bool AnnotateDimerMotifSimilarity;
       int OutputDetailedStats, OutputDimerMotifs, OutputGenomicLocations;
       int GenomicLocationsMaxSpacingDeviation;
       bool OutputPValueDistribution;

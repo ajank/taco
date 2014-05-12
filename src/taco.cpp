@@ -319,7 +319,7 @@ void *experimentThread(void *arg)
   }
 }
 
-void *postprocessThread(void *arg)
+void *postprocessThreadDimerMotifSimilarity(void *arg)
 {
   HypothesesSet *hs = (HypothesesSet *) arg;
 
@@ -331,6 +331,21 @@ void *postprocessThread(void *arg)
     pthread_mutex_unlock(&mutex);
 
     par.calculateDimerMotifSimilarity(fa, motifs, GC_content, hs->spec.Options.DimerMotifFlanks);
+  }
+}
+
+void *postprocessThreadDimerMotif(void *arg)
+{
+  HypothesesSet *hs = (HypothesesSet *) arg;
+
+  while (true)
+  {
+    pthread_mutex_lock(&mutex);
+    if (hypotheses_it == hs->hypotheses_end()) { pthread_mutex_unlock(&mutex); return NULL; }
+    HypothesesSet::Hypothesis &par = *hypotheses_it++;
+    pthread_mutex_unlock(&mutex);
+
+    par.calculateDimerMotif(fa, GC_content, hs->spec.Options.DimerMotifFlanks);
   }
 }
 
@@ -407,14 +422,29 @@ int main(int argc, char *argv[])
   hs.removeInsignificantHypotheses();
   cout << "Number of accepted hypotheses: " << hs.getNumberOfAcceptedHypotheses() << endl;
 
-  cout << endl << "Clustering the overrepresented motif complexes..." << endl;
-  // before clustering, calculate the emprirical motif and find similar individual motifs
-  hypotheses_it = hs.hypotheses_begin();
-  for (int i = 0; i < spec.Options.NumberOfThreads; i++)
-    pthread_create(&pth[i], NULL, postprocessThread, &hs);
-  for (int i = 0; i < spec.Options.NumberOfThreads; i++)
-    pthread_join(pth[i], NULL);
+  if (spec.Options.ClusteringDistanceConstant > 0.0 || spec.Options.ClusteringDistanceMultiplier > 0.0 || spec.Options.AnnotateDimerMotifSimilarity)
+  {
+    // before clustering, calculate the dimer motifs and possibly find similar individual motifs
+    hypotheses_it = hs.hypotheses_begin();
 
+    if (spec.Options.AnnotateDimerMotifSimilarity)
+    {
+      cout << endl << "Calculating dimer motifs and annotating their similarity to individual motifs..." << endl;
+      for (int i = 0; i < spec.Options.NumberOfThreads; i++)
+        pthread_create(&pth[i], NULL, postprocessThreadDimerMotifSimilarity, &hs);
+    }
+    else
+    {
+      cout << endl << "Calculating dimer motifs..." << endl;
+      for (int i = 0; i < spec.Options.NumberOfThreads; i++)
+        pthread_create(&pth[i], NULL, postprocessThreadDimerMotif, &hs);
+    }
+
+    for (int i = 0; i < spec.Options.NumberOfThreads; i++)
+      pthread_join(pth[i], NULL);
+  }
+
+  cout << endl << "Clustering the overrepresented motif complexes..." << endl;
   // cluster the hypotheses, then save the clustering results and dimer motifs
   hs.clusterHypotheses();
   cout << "Number of distinct predictions: " << hs.getNumberOfClusters() << endl;

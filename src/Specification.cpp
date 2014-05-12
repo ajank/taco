@@ -202,11 +202,13 @@ Specification::Specification(char *specFile)
   Options.PValueThreshold = 0.05;
 
   Options.DimerMotifFlanks = 5;
+  Options.ClusteringByIdentity = true;
   Options.ClusteringAcrossDatasets = true;
   Options.ClusteringDistanceConstant = 0;
   Options.ClusteringDistanceMultiplier = 0.15;
   Options.ClusteringOverlapThreshold = 0.2;
 
+  Options.AnnotateDimerMotifSimilarity = true;
   Options.OutputDetailedStats = OUTPUT_RANGE_ALL;
   Options.OutputDimerMotifs = OUTPUT_RANGE_ALL;
   Options.OutputGenomicLocations = OUTPUT_RANGE_ALL;
@@ -367,6 +369,8 @@ Specification::Specification(char *specFile)
       if (strcasecmp(key, "ClusteringDistanceMultiplier") == 0) { scan_double(value, Options.ClusteringDistanceMultiplier); continue; }
       if (strcasecmp(key, "ClusteringOverlapThreshold") == 0) { scan_double(value, Options.ClusteringOverlapThreshold); continue; }
 
+      if (strcasecmp(key, "ClusteringByIdentity") == 0) { scan_bool(value, Options.ClusteringByIdentity); continue; }
+      if (strcasecmp(key, "AnnotateDimerMotifSimilarity") == 0) { scan_bool(value, Options.AnnotateDimerMotifSimilarity); continue; }
       if (strcasecmp(key, "OutputDetailedStats") == 0) { scan_output_range(value, Options.OutputDetailedStats); continue; }
       if (strcasecmp(key, "OutputDimerMotifs") == 0) { scan_output_range(value, Options.OutputDimerMotifs); continue; }
       if (strcasecmp(key, "OutputGenomicLocations") == 0) { scan_output_range(value, Options.OutputGenomicLocations); continue; }

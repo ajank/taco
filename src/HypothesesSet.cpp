@@ -160,7 +160,6 @@ void HypothesesSet::Hypothesis::calculateDimerMotifSimilarity(const Genome &fa, 
   calculateDimerMotif(fa, GC_content, dimer_motif_margin);
 
   // compare the motif pair with all the single motifs
-  similarity.distance = INFINITY;
   for (vector<PositionWeightMatrix>::const_iterator jt = motifs.begin(); jt != motifs.end(); jt++)
   {
     bool same_orientation = true;
@@ -215,6 +214,7 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
   h.M2 = M2;
   h.cluster_id = 0;
   h.clustering_status = STATUS_UNRESOLVED;
+  h.similarity.distance = INFINITY;
   h.raw_log_p_value = INFINITY;
 
   // return early if the information content of any of the motifs is less than the minimal information contribution
@@ -440,60 +440,66 @@ void HypothesesSet::clusterHypotheses()
   {
     Hypothesis *it = *it_ptr;
 
-    // try to join the overrepresented motif complex to any of the previous clusters
-    for (vector<Hypothesis *>::iterator pred_ptr = clustered_hypotheses.begin(); pred_ptr != it_ptr; pred_ptr++)
+    if (spec.Options.ClusteringByIdentity || spec.Options.ClusteringDistanceConstant > 0.0 || spec.Options.ClusteringDistanceMultiplier > 0.0 || spec.Options.ClusteringOverlapThreshold < 1.0)
     {
-      Hypothesis *pred = *pred_ptr;
-
-      if (!spec.Options.ClusteringAcrossDatasets && pred->dataset_id != it->dataset_id) continue;
-
-      // first step of clustering: joining by motif complex identity
-      // join only with the most significant motif complex in a previously established cluster
-      if (pred->clustering_status == STATUS_CLUSTER_SEED)
+      // try to join the overrepresented motif complex to any of the previous clusters
+      for (vector<Hypothesis *>::iterator pred_ptr = clustered_hypotheses.begin(); pred_ptr != it_ptr; pred_ptr++)
       {
-        if (pred->M1 == it->M1 && pred->M2 == it->M2 && pred->offset == it->offset && pred->same_orientation == it->same_orientation)
-        {
-          joinHypothesis(pred, it, 0, true, STATUS_JOINED_BY_IDENTITY);
-          break;
-        }
-      }
+        Hypothesis *pred = *pred_ptr;
 
-      // second step of clustering: joining by dimer motif similarity
-      // join only with the signature motif complexes, i.e. identical to the most significant one in a previously established cluster
-      if (spec.Options.ClusteringDistanceConstant > 0.0 || spec.Options.ClusteringDistanceMultiplier > 0.0)
-      {
-        if (pred->clustering_status == STATUS_CLUSTER_SEED || pred->clustering_status == STATUS_JOINED_BY_IDENTITY)
-        {
-          int offset;
-          bool same_orientation;
-          double dist = pred->dimer.getMinimumEuclideanDistanceSquared(it->dimer, &offset, &same_orientation);
+        if (!spec.Options.ClusteringAcrossDatasets && pred->dataset_id != it->dataset_id) continue;
 
-          if (dist < spec.Options.ClusteringDistanceConstant + pred->dimer.inf_content * spec.Options.ClusteringDistanceMultiplier)
+        // first step of clustering: joining by motif complex identity
+        // join only with the most significant motif complex in a previously established cluster
+        if (spec.Options.ClusteringByIdentity)
+        {
+          if (pred->clustering_status == STATUS_CLUSTER_SEED)
           {
-            joinHypothesis(pred, it, offset, same_orientation, STATUS_JOINED_BY_SIMILARITY);
-            break;
+            if (pred->M1 == it->M1 && pred->M2 == it->M2 && pred->offset == it->offset && pred->same_orientation == it->same_orientation)
+            {
+              joinHypothesis(pred, it, 0, true, STATUS_JOINED_BY_IDENTITY);
+              break;
+            }
           }
         }
-      }
 
-      // third step of clustering: joining by overlap of genomic matches
-      // (precisely, the overlap is calculated for the most frequent structure of the pair of motif dimers)
-      // join only with the signature motif complexes and the complexes called similar to them at the second level
-      if (spec.Options.ClusteringOverlapThreshold < 1.0)
-      {
-        if (pred->clustering_status == STATUS_CLUSTER_SEED || pred->clustering_status == STATUS_JOINED_BY_IDENTITY || pred->clustering_status == STATUS_JOINED_BY_SIMILARITY)
+        // second step of clustering: joining by dimer motif similarity
+        // join only with the signature motif complexes, i.e. identical to the most significant one in a previously established cluster
+        if (spec.Options.ClusteringDistanceConstant > 0.0 || spec.Options.ClusteringDistanceMultiplier > 0.0)
         {
-          StatsSet ss(&*pred, &*it, spec.Options.MaxMotifSpacing);
-          ss.calculateStats(pred->M1_paired_matches, it->M1_paired_matches);
-
-          int offset;
-          bool same_orientation;
-          long int hits = ss.getMaximumStats(&offset, &same_orientation);
-
-          if (hits >= spec.Options.ClusteringOverlapThreshold * max((double) it->target_instances - it->prob * it->target_N, 0.0))
+          if (pred->clustering_status == STATUS_CLUSTER_SEED || pred->clustering_status == STATUS_JOINED_BY_IDENTITY)
           {
-            joinHypothesis(pred, it, offset, same_orientation, STATUS_JOINED_BY_OVERLAP);
-            break;
+            int offset;
+            bool same_orientation;
+            double dist = pred->dimer.getMinimumEuclideanDistanceSquared(it->dimer, &offset, &same_orientation);
+
+            if (dist < spec.Options.ClusteringDistanceConstant + pred->dimer.inf_content * spec.Options.ClusteringDistanceMultiplier)
+            {
+              joinHypothesis(pred, it, offset, same_orientation, STATUS_JOINED_BY_SIMILARITY);
+              break;
+            }
+          }
+        }
+
+        // third step of clustering: joining by overlap of genomic matches
+        // (precisely, the overlap is calculated for the most frequent structure of the pair of motif dimers)
+        // join only with the signature motif complexes and the complexes called similar to them at the second level
+        if (spec.Options.ClusteringOverlapThreshold < 1.0)
+        {
+          if (pred->clustering_status == STATUS_CLUSTER_SEED || pred->clustering_status == STATUS_JOINED_BY_IDENTITY || pred->clustering_status == STATUS_JOINED_BY_SIMILARITY)
+          {
+            StatsSet ss(&*pred, &*it, spec.Options.MaxMotifSpacing);
+            ss.calculateStats(pred->M1_paired_matches, it->M1_paired_matches);
+
+            int offset;
+            bool same_orientation;
+            long int hits = ss.getMaximumStats(&offset, &same_orientation);
+
+            if (hits >= spec.Options.ClusteringOverlapThreshold * max((double) it->target_instances - it->prob * it->target_N, 0.0))
+            {
+              joinHypothesis(pred, it, offset, same_orientation, STATUS_JOINED_BY_OVERLAP);
+              break;
+            }
           }
         }
       }
@@ -509,7 +515,8 @@ void HypothesesSet::clusterHypotheses()
     }
   }
 
-  sort(clustered_hypotheses.begin(), clustered_hypotheses.end(), Hypothesis::ptr_compare);
+  if (spec.Options.ClusteringByIdentity || spec.Options.ClusteringDistanceConstant > 0.0 || spec.Options.ClusteringDistanceMultiplier > 0.0 || spec.Options.ClusteringOverlapThreshold < 1.0)
+    sort(clustered_hypotheses.begin(), clustered_hypotheses.end(), Hypothesis::ptr_compare);
 }
 
 void HypothesesSet::writeDetailedStatsFile(const char *fname) const
@@ -612,7 +619,7 @@ void HypothesesSet::writeClusteringResultsFile(const char *fname) const
     exit(1);
   }
 
-  fprintf(fout, "cluster_id\thypothesis_id\tM1_acc\tM1_name\tM1_orientation\toffset\tM2_acc\tM2_name\tM2_orientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\tcluster_offset\tsimilarity_comment\n");
+  fprintf(fout, "cluster_id\thypothesis_id\tM1_acc\tM1_name\tM1_orientation\toffset\tM2_acc\tM2_name\tM2_orientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\tcluster_offset\tsimilarity_annotation\n");
 
   for (vector<Hypothesis *>::const_iterator it_ptr = clustered_hypotheses.begin(); it_ptr != clustered_hypotheses.end(); it_ptr++)
   {
