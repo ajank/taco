@@ -289,7 +289,7 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
         // don't consider the hypothesis if f_{12} / b_{12} is smaller than a given threshold
         // (default: FrequencyRatioThreshold = 1.0, i.e. exclude motif pairs which are less frequent in the foreground than in the background)
         // or we have encountered a singularity (sum_target_N == 0, sum_control_instances == 0 or control_N == 0)
-        if (prob_base < spec.options.FrequencyRatioThreshold || !isfinite(jt->prob)) jt->hypothesis_id = HYPOTHESIS_NOT_CONSIDERED;
+        if (prob_base < spec.Options.FrequencyRatioThreshold || !isfinite(jt->prob)) jt->hypothesis_id = HYPOTHESIS_NOT_CONSIDERED;
 
         if (jt->hypothesis_id == HYPOTHESIS_CONSIDERED)
         {
