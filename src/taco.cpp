@@ -172,6 +172,13 @@ void readDatasets(Specification &spec)
   {
     it->second.update_location_dist(fa);
     cout << Genome::dataset_names[it->first] << ": " << it->second.regions.size() << " regions, " << it->second.location_dist[0] << " bp" << endl;
+
+    if (spec.Options.OutputFastaDatasets)
+    {
+      char fname[1024];
+      snprintf(fname, 1024, "%s_%s.fa", spec.OutputPrefix.c_str(), Genome::dataset_names[it->first].c_str());
+      it->second.writeFastaFile(fa, fname);
+    }
   }
 
   // sort the control dataset and update its location_dist statistics
@@ -181,6 +188,13 @@ void readDatasets(Specification &spec)
   control_dataset.mergeOverlappingRegions(false); // merge regions from all target datasets
   control_dataset.update_location_dist(fa);
   cout << "control: " << control_dataset.regions.size() << " regions, " << control_dataset.location_dist[0] << " bp" << endl;
+
+  if (spec.Options.OutputFastaDatasets)
+  {
+    char fname[1024];
+    snprintf(fname, 1024, "%s_control.fa", spec.OutputPrefix.c_str());
+    control_dataset.writeFastaFile(fa, fname);
+  }
 
   if (control_dataset.location_dist[0] == 0)
   {

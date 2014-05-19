@@ -209,6 +209,7 @@ Specification::Specification(char *specFile)
   Options.ClusteringDistanceMultiplier = 0.15;
   Options.ClusteringOverlapThreshold = 0.2;
 
+  Options.OutputFastaDatasets = false;
   Options.AnnotateDimerMotifSimilarity = true;
   Options.OutputDetailedStats = OUTPUT_RANGE_ALL;
   Options.OutputDimerMotifs = OUTPUT_RANGE_ALL;
@@ -374,6 +375,7 @@ Specification::Specification(char *specFile)
       if (strcasecmp(key, "ClusteringOverlapThreshold") == 0) { scan_double(value, Options.ClusteringOverlapThreshold); continue; }
 
       if (strcasecmp(key, "ClusteringByIdentity") == 0) { scan_bool(value, Options.ClusteringByIdentity); continue; }
+      if (strcasecmp(key, "OutputFastaDatasets") == 0) { scan_bool(value, Options.OutputFastaDatasets); continue; }
       if (strcasecmp(key, "AnnotateDimerMotifSimilarity") == 0) { scan_bool(value, Options.AnnotateDimerMotifSimilarity); continue; }
       if (strcasecmp(key, "OutputDetailedStats") == 0) { scan_output_range(value, Options.OutputDetailedStats); continue; }
       if (strcasecmp(key, "OutputDimerMotifs") == 0) { scan_output_range(value, Options.OutputDimerMotifs); continue; }

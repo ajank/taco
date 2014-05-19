@@ -58,6 +58,7 @@ class NarrowPeak
     void restrictToTopSignalRegions(int limit, bool each_dataset_separately);
     void setRegionSize(int size);
     void mergeOverlappingRegions(bool each_dataset_separately);
+    void writeFastaFile(const Genome &fa, const string &fastaFile);
   private:
     static bool sortFunc_signalValue(const Region i, const Region j);
     static bool sortFunc_dataset_id_signalValue(const Region i, const Region j);

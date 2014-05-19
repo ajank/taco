@@ -84,7 +84,7 @@ class Specification
       bool ClusteringByIdentity, ClusteringAcrossDatasets;
       double ClusteringDistanceConstant, ClusteringDistanceMultiplier, ClusteringOverlapThreshold;
 
-      bool AnnotateDimerMotifSimilarity;
+      bool OutputFastaDatasets, AnnotateDimerMotifSimilarity;
       int OutputDetailedStats, OutputDimerMotifs, OutputGenomicLocations;
       int GenomicLocationsMaxSpacingDeviation;
       bool OutputPValueDistribution;

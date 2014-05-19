@@ -333,3 +333,38 @@ void NarrowPeak::mergeOverlappingRegions(bool each_dataset_separately)
     }
   }
 }
+
+void NarrowPeak::writeFastaFile(const Genome &fa, const string &fastaFile)
+{
+  FILE *fout;
+  int old_chrom_id = -1;
+  map<int, vector<char> >::const_iterator jt;
+
+  if ((fout = fopen(fastaFile.c_str(), "w")) == NULL)
+  {
+    cerr << "Could not open output file \"" << fastaFile << "\"" << endl;
+    exit(1);
+  }
+
+  for (list<Region>::iterator it = regions.begin(); it != regions.end(); it++)
+  {
+    fprintf(fout, ">%s_%d_%d\n", Genome::chrom_names[it->chrom_id].c_str(), it->start, it->end);
+
+    if (old_chrom_id != it->chrom_id)
+    {
+      old_chrom_id = it->chrom_id;
+      jt = fa.chroms.find(it->chrom_id);
+      if (jt == fa.chroms.end())
+      {
+        cerr << "NarrowPeak: chromosome \"" << Genome::chrom_names[it->chrom_id] << "\" not found in the genome" << endl;
+        exit(1);
+      }
+    }
+
+    for (int i = it->start; i < it->end; i++)
+      fprintf(fout, "%c", jt->second[i]);
+    fprintf(fout, "\n");
+  }
+
+  fclose(fout);
+}
