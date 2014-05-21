@@ -540,9 +540,9 @@ void HypothesesSet::writeDetailedStatsFile(const char *fname) const
   {
     if (spec.Options.OutputDetailedStats == OUTPUT_RANGE_SIGNATURE && it->removal_hypothesis->clustering_status != STATUS_CLUSTER_SEED && it->removal_hypothesis->clustering_status != STATUS_JOINED_BY_IDENTITY) continue;
 
-    fprintf(fout, "%ld\t%s\t%s\t%s\t%d\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-      it->hypothesis_id, it->M1->accession.c_str(), it->M2->accession.c_str(),
-      Genome::dataset_names[it->dataset_id].c_str(), it->offset, (it->same_orientation ? "same" : "opposite"),
+    fprintf(fout, "%ld\t%s\t%s\t%d\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
+      it->hypothesis_id, it->M1->accession.c_str(), it->M2->accession.c_str(), it->offset, (it->same_orientation ? "same" : "opposite"),
+      Genome::dataset_names[it->dataset_id].c_str(),
       it->target_instances, it->target_N, it->control_instances, it->control_N, it->freq_ratio, log(it->prob) / log(10), it->fold_change,
       it->M1->inf_content, it->M2->inf_content, it->overlap_inf_content, it->M1_inf_contribution, it->M2_inf_contribution,
       get_log10_raw_p_value(*it), get_log10_p_value(*it));
