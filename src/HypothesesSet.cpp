@@ -278,18 +278,20 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
         }
       }
 
-      // now we have all the sums to calculate p-values
-      double prob_base = ((double) sum_target_instances / sum_target_N) / ((double) sum_control_instances / sum_control_N);
+      // calculate frequency ratio, i.e. f_{12} / b_{12}; it summarizes all the hypotheses in ohl
+      double freq_ratio = ((double) sum_target_instances / sum_target_N) / ((double) sum_control_instances / sum_control_N);
 
+      // now we have all the sums to calculate p-values
       for (list<Hypothesis>::iterator jt = ohl.begin(); jt != ohl.end(); jt++)
       {
-        jt->prob = ((double) jt->control_instances / jt->control_N) * prob_base;
+        jt->freq_ratio = freq_ratio;
+        jt->prob = ((double) jt->control_instances / jt->control_N) * jt->freq_ratio;
         jt->fold_change = jt->target_instances / (jt->prob * jt->target_N);
 
-        // don't consider the hypothesis if f_{12} / b_{12} is smaller than a given threshold
+        // don't consider the hypothesis if the frequency ratio is smaller than a given threshold
         // (default: FrequencyRatioThreshold = 1.0, i.e. exclude motif pairs which are less frequent in the foreground than in the background)
         // or we have encountered a singularity (sum_target_N == 0, sum_control_instances == 0 or control_N == 0)
-        if (prob_base < spec.Options.FrequencyRatioThreshold || !isfinite(jt->prob)) jt->hypothesis_id = HYPOTHESIS_NOT_CONSIDERED;
+        if (jt->freq_ratio < spec.Options.FrequencyRatioThreshold || !isfinite(jt->prob)) jt->hypothesis_id = HYPOTHESIS_NOT_CONSIDERED;
 
         if (jt->hypothesis_id == HYPOTHESIS_CONSIDERED)
         {
@@ -532,16 +534,16 @@ void HypothesesSet::writeDetailedStatsFile(const char *fname) const
     exit(1);
   }
 
-  fprintf(fout, "hypothesis_id\tM1_acc\tM2_acc\tdataset\toffset\torientation\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\n");
+  fprintf(fout, "hypothesis_id\tM1_acc\tM2_acc\tdataset\toffset\torientation\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\n");
 
   for (list<Hypothesis>::const_iterator it = hypotheses.begin(); it != hypotheses.end(); it++)
   {
     if (spec.Options.OutputDetailedStats == OUTPUT_RANGE_SIGNATURE && it->removal_hypothesis->clustering_status != STATUS_CLUSTER_SEED && it->removal_hypothesis->clustering_status != STATUS_JOINED_BY_IDENTITY) continue;
 
-    fprintf(fout, "%ld\t%s\t%s\t%s\t%d\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
+    fprintf(fout, "%ld\t%s\t%s\t%s\t%d\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
       it->hypothesis_id, it->M1->accession.c_str(), it->M2->accession.c_str(),
       Genome::dataset_names[it->dataset_id].c_str(), it->offset, (it->same_orientation ? "same" : "opposite"),
-      it->target_instances, it->target_N, it->control_instances, it->control_N, log(it->prob) / log(10), it->fold_change,
+      it->target_instances, it->target_N, it->control_instances, it->control_N, it->freq_ratio, log(it->prob) / log(10), it->fold_change,
       it->M1->inf_content, it->M2->inf_content, it->overlap_inf_content, it->M1_inf_contribution, it->M2_inf_contribution,
       get_log10_raw_p_value(*it), get_log10_p_value(*it));
   }
@@ -620,7 +622,7 @@ void HypothesesSet::writeClusteringResultsFile(const char *fname) const
     exit(1);
   }
 
-  fprintf(fout, "cluster_id\thypothesis_id\tM1_acc\tM1_name\tM1_orientation\toffset\tM2_acc\tM2_name\tM2_orientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\tcluster_offset\tsimilarity_annotation\n");
+  fprintf(fout, "cluster_id\thypothesis_id\tM1_acc\tM1_name\tM1_orientation\toffset\tM2_acc\tM2_name\tM2_orientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\tcluster_offset\tsimilarity_annotation\n");
 
   for (vector<Hypothesis *>::const_iterator it_ptr = clustered_hypotheses.begin(); it_ptr != clustered_hypotheses.end(); it_ptr++)
   {
@@ -650,7 +652,7 @@ void HypothesesSet::writeClusteringResultsFile(const char *fname) const
       similarity_offset = it->pair_end - it->pair_start - it->similarity.offset - it->similarity.motif->length;
     }
 
-    fprintf(fout, "%d\t%ld\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t",
+    fprintf(fout, "%d\t%ld\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t",
       it->cluster_id, it->hypothesis_id,
       M1_goes_first ? it->M1->accession.c_str() : it->M2->accession.c_str(),
       M1_goes_first ? it->M1->name.c_str() : it->M2->name.c_str(),
@@ -660,7 +662,7 @@ void HypothesesSet::writeClusteringResultsFile(const char *fname) const
       M1_goes_first ? it->M2->name.c_str() : it->M1->name.c_str(),
       M1_goes_first ? ots(M2_same_orientation) : ots(M1_same_orientation),
       Genome::dataset_names[it->dataset_id].c_str(),
-      it->target_instances, it->target_N, it->control_instances, it->control_N, log(it->prob) / log(10), it->fold_change,
+      it->target_instances, it->target_N, it->control_instances, it->control_N, it->freq_ratio, log(it->prob) / log(10), it->fold_change,
       M1_goes_first ? it->M1->inf_content : it->M2->inf_content,
       M1_goes_first ? it->M2->inf_content : it->M1->inf_content,
       it->overlap_inf_content,

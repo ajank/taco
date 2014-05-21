@@ -46,7 +46,7 @@ class HypothesesSet
     struct Hypothesis
     {
       long int hypothesis_id, target_instances, target_N, control_instances, control_N;
-      double prob, fold_change, overlap_inf_content, M1_inf_contribution, M2_inf_contribution;
+      double freq_ratio, prob, fold_change, overlap_inf_content, M1_inf_contribution, M2_inf_contribution;
       double raw_log_p_value, removal_raw_log_p_value;
 
       PositionWeightMatrix *M1, *M2;
