@@ -34,19 +34,19 @@ StatsSet::StatsSet(PositionWeightMatrix *M0, PositionWeightMatrix *M1, int margi
 
 StatsSet::StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2, int margin)
 {
-  StatsSet::M0 = h1->M0;
-  StatsSet::M1 = h2->M0;
+  StatsSet::M0 = h1->parts[0].M;
+  StatsSet::M1 = h2->parts[0].M;
 
   min_offset_same = h1->pair_start - h2->pair_end - margin;
-  min_offset_opposite = h1->pair_start - (h2->M0->length - h2->pair_start) - margin;
+  min_offset_opposite = h1->pair_start - (h2->parts[0].M->length - h2->pair_start) - margin;
   min_offset = min(min_offset_same, min_offset_opposite);
 
   max_offset_same = h1->pair_end - h2->pair_start + margin;
-  max_offset_opposite = h1->pair_end - (h2->M0->length - h2->pair_end) + margin;
+  max_offset_opposite = h1->pair_end - (h2->parts[0].M->length - h2->pair_end) + margin;
   max_offset = max(max_offset_same, max_offset_opposite);
 
   offset_shift_same = h2->pair_start - h1->pair_start;
-  offset_shift_opposite = (h2->M0->length - h2->pair_end) - h1->pair_start;
+  offset_shift_opposite = (h2->parts[0].M->length - h2->pair_end) - h1->pair_start;
 
   initialize_carriers();
 }

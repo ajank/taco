@@ -49,7 +49,14 @@ class HypothesesSet
       double freq_ratio, prob, fold_change, overlap_inf_content, M0_inf_contribution, M1_inf_contribution;
       double raw_log_p_value, removal_raw_log_p_value;
 
-      PositionWeightMatrix *M0, *M1;
+      typedef struct part
+      {
+        PositionWeightMatrix *M;
+        int offset;
+        bool orientation, goes_first;
+      } part;
+      vector<part> parts;
+
       PositionWeightMatrix dimer;
       Hypothesis *removal_hypothesis;
 
@@ -64,9 +71,9 @@ class HypothesesSet
         bool same_orientation;
       } similarity;
 
-      int dataset_id, offset, pair_start, pair_end;
+      int dataset_id, pair_start, pair_end;
       int clustering_status, cluster_id, cluster_offset;
-      bool same_orientation, M0_goes_first, cluster_same_orientation;
+      bool cluster_same_orientation;
 
       bool operator<(const Hypothesis &other) const;
       static bool ptr_compare(const Hypothesis *lhs, const Hypothesis *rhs);
@@ -116,12 +123,12 @@ class HypothesesSet
 
 inline int HypothesesSet::Hypothesis::get_start(const PositionWeightMatrix::MotifMatch &mm) const
 {
-  return (mm.strand == '+') ? mm.start + pair_start : mm.start + M0->length - pair_end;
+  return (mm.strand == '+') ? mm.start + pair_start : mm.start + parts[0].M->length - pair_end;
 }
 
 inline int HypothesesSet::Hypothesis::get_end(const PositionWeightMatrix::MotifMatch &mm) const
 {
-  return (mm.strand == '+') ? mm.start + pair_end : mm.start + M0->length - pair_start;
+  return (mm.strand == '+') ? mm.start + pair_end : mm.start + parts[0].M->length - pair_start;
 }
 
 inline int HypothesesSet::Hypothesis::get_length() const
