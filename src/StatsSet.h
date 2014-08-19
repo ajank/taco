@@ -40,13 +40,13 @@ class Stats
 class StatsSet
 {
   public:
-    StatsSet(PositionWeightMatrix *M1, PositionWeightMatrix *M2, int margin);
+    StatsSet(PositionWeightMatrix *M0, PositionWeightMatrix *M1, int margin);
     StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2, int margin);
     StatsSet(const StatsSet &other);
     StatsSet &operator= (const StatsSet &other);
 
-    PositionWeightMatrix *M1, *M2;
-    vector<PositionWeightMatrix::MotifMatch> M1_filtered_matches, M2_filtered_matches;
+    PositionWeightMatrix *M0, *M1;
+    vector<PositionWeightMatrix::MotifMatch> M0_filtered_matches, M1_filtered_matches;
     int min_offset, min_offset_same, min_offset_opposite;
     int max_offset, max_offset_same, max_offset_opposite;
     int offset_shift_same, offset_shift_opposite;
@@ -54,11 +54,11 @@ class StatsSet
     void addHit(int offset, bool same_orientation);
     Stats *getStats(int offset, bool same_orientation) const;
     long int getMaximumStats(int *returned_offset, bool *returned_same_orientation) const;
-    void calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M1_matches, const vector<PositionWeightMatrix::MotifMatch> &M2_matches);
+    void calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M0_matches, const vector<PositionWeightMatrix::MotifMatch> &M1_matches);
 
     void addMotifMatchesFromRegions(const NarrowPeak *regions);
     void calculateStats();
-    void returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M1_paired_matches, int offset, bool same_orientation) const;
+    void returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_paired_matches, int offset, bool same_orientation) const;
 
     ~StatsSet();
 
@@ -86,7 +86,7 @@ inline long int Stats::getHits() const
 
 inline void StatsSet::calculateStats()
 {
-  return calculateStats(M1_filtered_matches, M2_filtered_matches);
+  return calculateStats(M0_filtered_matches, M1_filtered_matches);
 }
 
 #endif

@@ -22,31 +22,31 @@
 
 #include "StatsSet.h"
 
-StatsSet::StatsSet(PositionWeightMatrix *M1, PositionWeightMatrix *M2, int margin)
+StatsSet::StatsSet(PositionWeightMatrix *M0, PositionWeightMatrix *M1, int margin)
 {
+  StatsSet::M0 = M0;
   StatsSet::M1 = M1;
-  StatsSet::M2 = M2;
-  min_offset = min_offset_same = min_offset_opposite = -M2->length - margin;
-  max_offset = max_offset_same = max_offset_opposite = M1->length + margin;
+  min_offset = min_offset_same = min_offset_opposite = -M1->length - margin;
+  max_offset = max_offset_same = max_offset_opposite = M0->length + margin;
   offset_shift_same = offset_shift_opposite = 0;
   initialize_carriers();
 }
 
 StatsSet::StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2, int margin)
 {
-  StatsSet::M1 = h1->M1;
-  StatsSet::M2 = h2->M1;
+  StatsSet::M0 = h1->M0;
+  StatsSet::M1 = h2->M0;
 
   min_offset_same = h1->pair_start - h2->pair_end - margin;
-  min_offset_opposite = h1->pair_start - (h2->M1->length - h2->pair_start) - margin;
+  min_offset_opposite = h1->pair_start - (h2->M0->length - h2->pair_start) - margin;
   min_offset = min(min_offset_same, min_offset_opposite);
 
   max_offset_same = h1->pair_end - h2->pair_start + margin;
-  max_offset_opposite = h1->pair_end - (h2->M1->length - h2->pair_end) + margin;
+  max_offset_opposite = h1->pair_end - (h2->M0->length - h2->pair_end) + margin;
   max_offset = max(max_offset_same, max_offset_opposite);
 
   offset_shift_same = h2->pair_start - h1->pair_start;
-  offset_shift_opposite = (h2->M1->length - h2->pair_end) - h1->pair_start;
+  offset_shift_opposite = (h2->M0->length - h2->pair_end) - h1->pair_start;
 
   initialize_carriers();
 }
@@ -88,8 +88,8 @@ void StatsSet::initialize_carriers()
 
 void StatsSet::copy_constants(const StatsSet &other)
 {
+  M0 = other.M0;
   M1 = other.M1;
-  M2 = other.M2;
   min_offset = other.min_offset;
   min_offset_same = other.min_offset_same;
   min_offset_opposite = other.min_offset_opposite;
@@ -152,38 +152,38 @@ long int StatsSet::getMaximumStats(int *returned_offset, bool *returned_same_ori
 
 void StatsSet::addMotifMatchesFromRegions(const NarrowPeak *regions)
 {
+  vector<PositionWeightMatrix::MotifMatch>::iterator M0_it = M0->matches.begin();
+  vector<PositionWeightMatrix::MotifMatch>::iterator M0_matches_end = M0->matches.end();
   vector<PositionWeightMatrix::MotifMatch>::iterator M1_it = M1->matches.begin();
   vector<PositionWeightMatrix::MotifMatch>::iterator M1_matches_end = M1->matches.end();
-  vector<PositionWeightMatrix::MotifMatch>::iterator M2_it = M2->matches.begin();
-  vector<PositionWeightMatrix::MotifMatch>::iterator M2_matches_end = M2->matches.end();
 
   for (list<NarrowPeak::Region>::const_iterator jt = regions->regions.begin(); jt != regions->regions.end(); jt++)
   {
     // taking pseudo_start and pseudo_end, the frequencies will be comparable regardles of the region fragmentation
-    int jt_pseudo_start = jt->start - M1->length / 2;
-    int jt_pseudo_end = jt->end - M1->length / 2;
+    int jt_pseudo_start = jt->start - M0->length / 2;
+    int jt_pseudo_end = jt->end - M0->length / 2;
+    while (M0_it != M0_matches_end && M0_it->chrom_id < jt->chrom_id)
+      M0_it++;
+    while (M0_it != M0_matches_end && M0_it->chrom_id == jt->chrom_id && M0_it->start < jt_pseudo_start)
+      M0_it++;
+    while (M0_it != M0_matches_end && M0_it->chrom_id == jt->chrom_id && M0_it->start < jt_pseudo_end)
+      M0_filtered_matches.push_back(*M0_it++);
+
+    jt_pseudo_start = jt->start - M1->length / 2;
+    jt_pseudo_end = jt->end - M1->length / 2;
     while (M1_it != M1_matches_end && M1_it->chrom_id < jt->chrom_id)
       M1_it++;
     while (M1_it != M1_matches_end && M1_it->chrom_id == jt->chrom_id && M1_it->start < jt_pseudo_start)
       M1_it++;
     while (M1_it != M1_matches_end && M1_it->chrom_id == jt->chrom_id && M1_it->start < jt_pseudo_end)
       M1_filtered_matches.push_back(*M1_it++);
-
-    jt_pseudo_start = jt->start - M2->length / 2;
-    jt_pseudo_end = jt->end - M2->length / 2;
-    while (M2_it != M2_matches_end && M2_it->chrom_id < jt->chrom_id)
-      M2_it++;
-    while (M2_it != M2_matches_end && M2_it->chrom_id == jt->chrom_id && M2_it->start < jt_pseudo_start)
-      M2_it++;
-    while (M2_it != M2_matches_end && M2_it->chrom_id == jt->chrom_id && M2_it->start < jt_pseudo_end)
-      M2_filtered_matches.push_back(*M2_it++);
   }
 }
 
-void StatsSet::calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M1_matches, const vector<PositionWeightMatrix::MotifMatch> &M2_matches)
+void StatsSet::calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M0_matches, const vector<PositionWeightMatrix::MotifMatch> &M1_matches)
 {
-  vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_head = M2_matches.begin();
-  vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_tail = M2_matches.begin();
+  vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_head = M1_matches.begin();
+  vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_tail = M1_matches.begin();
 
 /* We need to filter jrts. There are two cases:
 (1) same orientation: looking for jrts satisfying
@@ -192,26 +192,26 @@ void StatsSet::calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M1
 
 (2) opposite orientation: looking for jrts satisfying
       min_offset <= irt->end - jrt->end <= max_offset
-      min_offset <= irt->start + M1->length - jrt->start - M2->length <= max_offset
-      - max_offset <= - irt->start - M1->length + jrt->start + M2->length <= - min_offset
-      irt->start + M1->length - M2->length - max_offset <= jrt->start <= irt->start + M1->length - M2->length - min_offset
-      irt->start + M1->length - M2->length - max_offset <= jrt->start <= irt->start + M1->length - M2->length - min_offset
+      min_offset <= irt->start + M0->length - jrt->start - M1->length <= max_offset
+      - max_offset <= - irt->start - M0->length + jrt->start + M1->length <= - min_offset
+      irt->start + M0->length - M1->length - max_offset <= jrt->start <= irt->start + M0->length - M1->length - min_offset
+      irt->start + M0->length - M1->length - max_offset <= jrt->start <= irt->start + M0->length - M1->length - min_offset
     but
-      M1->length - M2->length - max_offset = M1->length - M2->length - M1->length - margin + 1 = min_offset
-      M1->length - M2->length - min_offset = M1->length - M2->length + M2->length + margin - 1 = max_offset
+      M0->length - M1->length - max_offset = M0->length - M1->length - M0->length - margin + 1 = min_offset
+      M0->length - M1->length - min_offset = M0->length - M1->length + M1->length + margin - 1 = max_offset
     so the above inequalities are equivalent to
       irt->start + min_offset <= jrt->start <= irt->start + max_offset. */
 
-  for (vector<PositionWeightMatrix::MotifMatch>::const_iterator irt = M1_matches.begin(); irt != M1_matches.end(); irt++)
+  for (vector<PositionWeightMatrix::MotifMatch>::const_iterator irt = M0_matches.begin(); irt != M0_matches.end(); irt++)
   {
-    while (jrt_head != M2_matches.end() && jrt_head->chrom_id < irt->chrom_id)
+    while (jrt_head != M1_matches.end() && jrt_head->chrom_id < irt->chrom_id)
       jrt_head++;
-    while (jrt_head != M2_matches.end() && jrt_head->chrom_id == irt->chrom_id && jrt_head->start < irt->start + min_offset)
+    while (jrt_head != M1_matches.end() && jrt_head->chrom_id == irt->chrom_id && jrt_head->start < irt->start + min_offset)
       jrt_head++;
 
-    while (jrt_tail != M2_matches.end() && jrt_tail->chrom_id < irt->chrom_id)
+    while (jrt_tail != M1_matches.end() && jrt_tail->chrom_id < irt->chrom_id)
       jrt_tail++;
-    while (jrt_tail != M2_matches.end() && jrt_tail->chrom_id == irt->chrom_id && jrt_tail->start <= irt->start + max_offset)
+    while (jrt_tail != M1_matches.end() && jrt_tail->chrom_id == irt->chrom_id && jrt_tail->start <= irt->start + max_offset)
       jrt_tail++;
 
     for (vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt = jrt_head; jrt != jrt_tail; jrt++)
@@ -219,39 +219,39 @@ void StatsSet::calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M1
       if (irt->strand == '+')
         addHit(jrt->start - irt->start, jrt->strand == '+');
       else
-        addHit(irt->start + M1->length - jrt->start - M2->length, jrt->strand != '+');
+        addHit(irt->start + M0->length - jrt->start - M1->length, jrt->strand != '+');
     }
   }
 }
 
-void StatsSet::returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M1_paired_matches, int offset, bool same_orientation) const
+void StatsSet::returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_paired_matches, int offset, bool same_orientation) const
 {
-  vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_head = M2_filtered_matches.begin();
-  vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_tail = M2_filtered_matches.begin();
+  vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_head = M1_filtered_matches.begin();
+  vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_tail = M1_filtered_matches.begin();
 
-  for (vector<PositionWeightMatrix::MotifMatch>::const_iterator irt = M1_filtered_matches.begin(); irt != M1_filtered_matches.end(); irt++)
+  for (vector<PositionWeightMatrix::MotifMatch>::const_iterator irt = M0_filtered_matches.begin(); irt != M0_filtered_matches.end(); irt++)
   {
-    while (jrt_head != M2_filtered_matches.end() && jrt_head->chrom_id < irt->chrom_id)
+    while (jrt_head != M1_filtered_matches.end() && jrt_head->chrom_id < irt->chrom_id)
       jrt_head++;
-    while (jrt_head != M2_filtered_matches.end() && jrt_head->chrom_id == irt->chrom_id && jrt_head->start < irt->start + min_offset)
+    while (jrt_head != M1_filtered_matches.end() && jrt_head->chrom_id == irt->chrom_id && jrt_head->start < irt->start + min_offset)
       jrt_head++;
 
-    while (jrt_tail != M2_filtered_matches.end() && jrt_tail->chrom_id < irt->chrom_id)
+    while (jrt_tail != M1_filtered_matches.end() && jrt_tail->chrom_id < irt->chrom_id)
       jrt_tail++;
-    while (jrt_tail != M2_filtered_matches.end() && jrt_tail->chrom_id == irt->chrom_id && jrt_tail->start <= irt->start + max_offset)
+    while (jrt_tail != M1_filtered_matches.end() && jrt_tail->chrom_id == irt->chrom_id && jrt_tail->start <= irt->start + max_offset)
       jrt_tail++;
 
     if (irt->strand == '+')
     {
       for (vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt = jrt_head; jrt != jrt_tail; jrt++)
         if (jrt->start - irt->start == offset && (jrt->strand == '+') == same_orientation)
-          M1_paired_matches.push_back(*irt);
+          M0_paired_matches.push_back(*irt);
     }
     else
     {
       for (vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt = jrt_head; jrt != jrt_tail; jrt++)
-        if (irt->start + M1->length - jrt->start - M2->length == offset && (jrt->strand != '+') == same_orientation)
-          M1_paired_matches.push_back(*irt);
+        if (irt->start + M0->length - jrt->start - M1->length == offset && (jrt->strand != '+') == same_orientation)
+          M0_paired_matches.push_back(*irt);
     }
   }
 }

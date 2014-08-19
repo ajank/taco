@@ -47,56 +47,56 @@ bool HypothesesSet::Hypothesis::ptr_compare(const Hypothesis *lhs, const Hypothe
 
 void HypothesesSet::Hypothesis::calculateStructure()
 {
-  // at each of the overlapping positions, choose either M1 or M2 column to withdraw at this position
+  // at each of the overlapping positions, choose either M0 or M1 column to withdraw at this position
   overlap_inf_content = 0.0; // minimal sum of IC of withdrawn motif matrix columns
+  M0_inf_contribution = 0.0;
   M1_inf_contribution = 0.0;
-  M2_inf_contribution = 0.0;
   pair_start = min(0, offset);
-  pair_end = max(M1->length, M2->length + offset);
+  pair_end = max(M0->length, M1->length + offset);
 
-  double M1_mass_center = 0.0, M2_mass_center = 0.0;
+  double M0_mass_center = 0.0, M1_mass_center = 0.0;
 
   for (int i = pair_start; i < pair_end; i++)
   {
-    double M1_pIC = 0.0, M2_pIC = 0.0;
+    double M0_pIC = 0.0, M1_pIC = 0.0;
 
-    if (i >= 0 && i < M1->length)
-      M1_pIC = M1->position_inf_content[i];
+    if (i >= 0 && i < M0->length)
+      M0_pIC = M0->position_inf_content[i];
 
-    if (i >= offset && i < M2->length + offset)
+    if (i >= offset && i < M1->length + offset)
     {
       if (same_orientation)
-        M2_pIC = M2->position_inf_content[i - offset];
+        M1_pIC = M1->position_inf_content[i - offset];
       else
-        M2_pIC = M2->position_inf_content[M2->length - 1 - i + offset];
+        M1_pIC = M1->position_inf_content[M1->length - 1 - i + offset];
     }
 
-    if (M1_pIC > M2_pIC)
+    if (M0_pIC > M1_pIC)
     {
+      M0_mass_center += i * M0_pIC;
+      M0_inf_contribution += M0_pIC;
+      overlap_inf_content += M1_pIC;
+    }
+    else if (M0_pIC < M1_pIC)
+    {
+      overlap_inf_content += M0_pIC;
       M1_mass_center += i * M1_pIC;
       M1_inf_contribution += M1_pIC;
-      overlap_inf_content += M2_pIC;
-    }
-    else if (M1_pIC < M2_pIC)
-    {
-      overlap_inf_content += M1_pIC;
-      M2_mass_center += i * M2_pIC;
-      M2_inf_contribution += M2_pIC;
     }
     else
     {
+      M0_mass_center += i * M0_pIC / 2;
+      M0_inf_contribution += M0_pIC / 2;
+      overlap_inf_content += (M0_pIC + M1_pIC) / 2;
       M1_mass_center += i * M1_pIC / 2;
       M1_inf_contribution += M1_pIC / 2;
-      overlap_inf_content += (M1_pIC + M2_pIC) / 2;
-      M2_mass_center += i * M2_pIC / 2;
-      M2_inf_contribution += M2_pIC / 2;
     }
   }
 
+  M0_mass_center /= M0_inf_contribution;
   M1_mass_center /= M1_inf_contribution;
-  M2_mass_center /= M2_inf_contribution;
 
-  M1_goes_first = M1_mass_center <= M2_mass_center;
+  M0_goes_first = M0_mass_center <= M1_mass_center;
 }
 
 void HypothesesSet::Hypothesis::calculateDimerMotif(const Genome &fa, double GC_content, int dimer_motif_margin)
@@ -104,7 +104,7 @@ void HypothesesSet::Hypothesis::calculateDimerMotif(const Genome &fa, double GC_
   dimer = PositionWeightMatrix(GC_content);
   vector<string> seqs;
 
-  for (vector<PositionWeightMatrix::MotifMatch>::iterator jt = M1_paired_matches.begin(); jt != M1_paired_matches.end(); jt++)
+  for (vector<PositionWeightMatrix::MotifMatch>::iterator jt = M0_paired_matches.begin(); jt != M0_paired_matches.end(); jt++)
   {
     map<int, vector<char> >::const_iterator it = fa.chroms.find(jt->chrom_id);
     if (it == fa.chroms.end()) continue;
@@ -154,7 +154,7 @@ void HypothesesSet::Hypothesis::calculateDimerMotif(const Genome &fa, double GC_
 // before clustering, calculate the emprirical motif and find similar individual motifs
 void HypothesesSet::Hypothesis::calculateDimerMotifSimilarity(const Genome &fa, const vector<PositionWeightMatrix> &motifs, double GC_content, int dimer_motif_margin)
 {
-  if (M1_paired_matches.empty()) return; // no genomic instances, no dimer motif
+  if (M0_paired_matches.empty()) return; // no genomic instances, no dimer motif
 
   // calculate the dimer motif
   calculateDimerMotif(fa, GC_content, dimer_motif_margin);
@@ -192,7 +192,7 @@ HypothesesSet::HypothesesSet(const Specification &spec) : spec(spec)
   pthread_mutex_init(&remove_mutex, NULL);
 }
 
-void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *M2, const map<int, const NarrowPeak *> &target_datasets, const NarrowPeak *control_dataset)
+void HypothesesSet::processPair(PositionWeightMatrix *M0, PositionWeightMatrix *M1, const map<int, const NarrowPeak *> &target_datasets, const NarrowPeak *control_dataset)
 {
   vector<vector<bool> > orientation_sets;
 
@@ -210,17 +210,17 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
   }
 
   Hypothesis h;
+  h.M0 = M0;
   h.M1 = M1;
-  h.M2 = M2;
   h.cluster_id = 0;
   h.clustering_status = STATUS_UNRESOLVED;
   h.similarity.distance = INFINITY;
   h.raw_log_p_value = INFINITY;
 
   // return early if the information content of any of the motifs is less than the minimal information contribution
-  if (M1->inf_content < spec.Options.MinMotifInformationContribution || M2->inf_content < spec.Options.MinMotifInformationContribution) return;
+  if (M0->inf_content < spec.Options.MinMotifInformationContribution || M1->inf_content < spec.Options.MinMotifInformationContribution) return;
 
-  StatsSet ss_control(M1, M2, spec.Options.MaxMotifSpacing);
+  StatsSet ss_control(M0, M1, spec.Options.MaxMotifSpacing);
   ss_control.addMotifMatchesFromRegions(control_dataset);
   ss_control.calculateStats();
 
@@ -228,17 +228,17 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
   {
     h.dataset_id = it->first;
     const NarrowPeak *target_dataset = it->second;
-    StatsSet ss_target(M1, M2, spec.Options.MaxMotifSpacing);
+    StatsSet ss_target(M0, M1, spec.Options.MaxMotifSpacing);
     ss_target.addMotifMatchesFromRegions(target_dataset);
     ss_target.calculateStats();
 
-    list<Hypothesis> hl; // gathers all the hypotheses for (M1, M2, dataset)
+    list<Hypothesis> hl; // gathers all the hypotheses for (M0, M1, dataset)
     double min_raw_log_p_value = INFINITY;
     list<Hypothesis>::iterator min_raw_log_p_value_hypothesis = hl.end();
 
     for (vector<vector<bool> >::iterator orientations = orientation_sets.begin(); orientations != orientation_sets.end(); orientations++)
     {
-      list<Hypothesis> ohl; // gathers all the hypotheses for (M1, M2, dataset, orientations)
+      list<Hypothesis> ohl; // gathers all the hypotheses for (M0, M1, dataset, orientations)
       // if ConsiderOrientationsSeparately = True, orientations can be {same} or {opposite}
       // otherwise, orientations are {same, opposite} and hl will eventually be the same as ohl
       long int sum_target_instances = 0, sum_target_N = 0, sum_control_instances = 0, sum_control_N = 0;
@@ -248,7 +248,7 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
         h.same_orientation = *jt;
         for (h.offset = ss_target.min_offset; h.offset <= ss_target.max_offset; h.offset++)
         {
-          int size = abs(h.offset + M2->length / 2 - M1->length / 2); // for calculating motif midpoints, cf. PositionWeightMatrix::scan
+          int size = abs(h.offset + M1->length / 2 - M0->length / 2); // for calculating motif midpoints, cf. PositionWeightMatrix::scan
 
           Stats *target = ss_target.getStats(h.offset, h.same_orientation);
           Stats *control = ss_control.getStats(h.offset, h.same_orientation);
@@ -259,11 +259,11 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
           h.control_N = control_dataset->location_dist[size];
           h.calculateStructure();
 
-          if (h.overlap_inf_content > spec.Options.MaxOverlappingInformationContent || h.M1_inf_contribution < spec.Options.MinMotifInformationContribution || h.M2_inf_contribution < spec.Options.MinMotifInformationContribution)
+          if (h.overlap_inf_content > spec.Options.MaxOverlappingInformationContent || h.M0_inf_contribution < spec.Options.MinMotifInformationContribution || h.M1_inf_contribution < spec.Options.MinMotifInformationContribution)
             h.hypothesis_id = HYPOTHESIS_NOT_CONSIDERED; // disallowed motif complex structures
           else
           {
-            if ((M1 == M2) && h.same_orientation & (h.offset < 0))
+            if ((M0 == M1) && h.same_orientation & (h.offset < 0))
               h.hypothesis_id = HYPOTHESIS_NOT_CONSIDERED; // don't consider the redundant hypotheses in homodimer case
             else
               h.hypothesis_id = HYPOTHESIS_CONSIDERED;
@@ -340,7 +340,7 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
       for (list<Hypothesis>::iterator jt = hl.begin(); jt != hl.end(); jt++)
       {
         size++;
-        // group together the hypotheses for given (M1, M2, dataset)
+        // group together the hypotheses for given (M0, M1, dataset)
         jt->removal_raw_log_p_value = min_raw_log_p_value;
         jt->removal_hypothesis = &*min_raw_log_p_value_hypothesis;
 
@@ -353,12 +353,12 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
         // and for the ones that look significant for now, save their genomic instances
         if (jt->clustering_status != STATUS_REJECTED)
         {
-          ss_target.returnPairedMatches(jt->M1_paired_matches, jt->offset, jt->same_orientation);
-          assert((long int) jt->M1_paired_matches.size() == jt->target_instances);
+          ss_target.returnPairedMatches(jt->M0_paired_matches, jt->offset, jt->same_orientation);
+          assert((long int) jt->M0_paired_matches.size() == jt->target_instances);
 
-          int spacing_sign = jt->M1_goes_first ? 1 : -1;
+          int spacing_sign = jt->M0_goes_first ? 1 : -1;
           for (int spacing_deviation = 1; spacing_deviation <= spec.Options.GenomicLocationsMaxSpacingDeviation; spacing_deviation++)
-            ss_target.returnPairedMatches(jt->M1_spaced_matches[spacing_deviation], jt->offset + spacing_sign * spacing_deviation, jt->same_orientation);
+            ss_target.returnPairedMatches(jt->M0_spaced_matches[spacing_deviation], jt->offset + spacing_sign * spacing_deviation, jt->same_orientation);
         }
       }
 
@@ -390,7 +390,7 @@ void HypothesesSet::removeInsignificantHypotheses()
     if (!is_p_value_significant(it->raw_log_p_value))
     {
       it->clustering_status = STATUS_REJECTED;
-      it->M1_paired_matches.clear();
+      it->M0_paired_matches.clear();
     }
 
     if (!is_p_value_significant(it->removal_raw_log_p_value))
@@ -458,7 +458,7 @@ void HypothesesSet::clusterHypotheses()
         {
           if (pred->clustering_status == STATUS_CLUSTER_SEED)
           {
-            if (pred->M1 == it->M1 && pred->M2 == it->M2 && pred->offset == it->offset && pred->same_orientation == it->same_orientation)
+            if (pred->M0 == it->M0 && pred->M1 == it->M1 && pred->offset == it->offset && pred->same_orientation == it->same_orientation)
             {
               joinHypothesis(pred, it, 0, true, STATUS_JOINED_BY_IDENTITY);
               break;
@@ -492,7 +492,7 @@ void HypothesesSet::clusterHypotheses()
           if (pred->clustering_status == STATUS_CLUSTER_SEED || pred->clustering_status == STATUS_JOINED_BY_IDENTITY || pred->clustering_status == STATUS_JOINED_BY_SIMILARITY)
           {
             StatsSet ss(&*pred, &*it, spec.Options.MaxMotifSpacing);
-            ss.calculateStats(pred->M1_paired_matches, it->M1_paired_matches);
+            ss.calculateStats(pred->M0_paired_matches, it->M0_paired_matches);
 
             int offset;
             bool same_orientation;
@@ -534,17 +534,17 @@ void HypothesesSet::writeDetailedStatsFile(const char *fname) const
     exit(1);
   }
 
-  fprintf(fout, "hypothesis_id\tM1_acc\tM2_acc\tdataset\toffset\torientation\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\n");
+  fprintf(fout, "hypothesis_id\tM0_acc\tM1_acc\tdataset\toffset\torientation\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM0_inf_content\tM1_inf_content\toverlap_inf_content\tM0_inf_contribution\tM1_inf_contribution\tlog10_raw_p_value\tlog10_p_value\n");
 
   for (list<Hypothesis>::const_iterator it = hypotheses.begin(); it != hypotheses.end(); it++)
   {
     if (spec.Options.OutputDetailedStats == OUTPUT_RANGE_SIGNATURE && it->removal_hypothesis->clustering_status != STATUS_CLUSTER_SEED && it->removal_hypothesis->clustering_status != STATUS_JOINED_BY_IDENTITY) continue;
 
     fprintf(fout, "%ld\t%s\t%s\t%d\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-      it->hypothesis_id, it->M1->accession.c_str(), it->M2->accession.c_str(), it->offset, (it->same_orientation ? "same" : "opposite"),
+      it->hypothesis_id, it->M0->accession.c_str(), it->M1->accession.c_str(), it->offset, (it->same_orientation ? "same" : "opposite"),
       Genome::dataset_names[it->dataset_id].c_str(),
       it->target_instances, it->target_N, it->control_instances, it->control_N, it->freq_ratio, log(it->prob) / log(10), it->fold_change,
-      it->M1->inf_content, it->M2->inf_content, it->overlap_inf_content, it->M1_inf_contribution, it->M2_inf_contribution,
+      it->M0->inf_content, it->M1->inf_content, it->overlap_inf_content, it->M0_inf_contribution, it->M1_inf_contribution,
       get_log10_raw_p_value(*it), get_log10_p_value(*it));
   }
 
@@ -569,22 +569,22 @@ void HypothesesSet::writeGenomicLocationsFile(const char *fname) const
   {
     if (spec.Options.OutputGenomicLocations == OUTPUT_RANGE_SIGNATURE && it->clustering_status != STATUS_CLUSTER_SEED && it->clustering_status != STATUS_JOINED_BY_IDENTITY) continue;
 
-    for (vector<PositionWeightMatrix::MotifMatch>::const_iterator jt = it->M1_paired_matches.begin(); jt != it->M1_paired_matches.end(); jt++)
+    for (vector<PositionWeightMatrix::MotifMatch>::const_iterator jt = it->M0_paired_matches.begin(); jt != it->M0_paired_matches.end(); jt++)
       fprintf(fout, "%ld%s\t%s\t%d\t%d\t%c\n", it->hypothesis_id, (spec.Options.GenomicLocationsMaxSpacingDeviation > 0) ? "\t0" : "",
         Genome::chrom_names[jt->chrom_id].c_str(), it->get_start(*jt), it->get_end(*jt), jt->strand);
 
-    int spacing_sign = it->M1_goes_first ? 1 : -1;
+    int spacing_sign = it->M0_goes_first ? 1 : -1;
     for (int spacing_deviation = 1; spacing_deviation <= spec.Options.GenomicLocationsMaxSpacingDeviation; spacing_deviation++)
     {
       int spaced_pair_start = min(0, it->offset + spacing_sign * spacing_deviation);
-      int spaced_pair_end = max(it->M1->length, it->M2->length + it->offset + spacing_sign * spacing_deviation);
+      int spaced_pair_end = max(it->M0->length, it->M1->length + it->offset + spacing_sign * spacing_deviation);
 
-      map<int, vector<PositionWeightMatrix::MotifMatch> >::const_iterator jt = it->M1_spaced_matches.find(spacing_deviation);
-      if (jt != it->M1_spaced_matches.end())
+      map<int, vector<PositionWeightMatrix::MotifMatch> >::const_iterator jt = it->M0_spaced_matches.find(spacing_deviation);
+      if (jt != it->M0_spaced_matches.end())
         for (vector<PositionWeightMatrix::MotifMatch>::const_iterator kt = jt->second.begin(); kt != jt->second.end(); kt++)
           fprintf(fout, "%ld\t%d\t%s\t%d\t%d\t%c\n", it->hypothesis_id, spacing_deviation, Genome::chrom_names[kt->chrom_id].c_str(),
-            (kt->strand == '+') ? kt->start + spaced_pair_start : kt->start + it->M1->length - spaced_pair_end,
-            (kt->strand == '+') ? kt->start + spaced_pair_end : kt->start + it->M1->length - spaced_pair_start, kt->strand);
+            (kt->strand == '+') ? kt->start + spaced_pair_start : kt->start + it->M0->length - spaced_pair_end,
+            (kt->strand == '+') ? kt->start + spaced_pair_end : kt->start + it->M0->length - spaced_pair_start, kt->strand);
     }
   }
 
@@ -622,7 +622,7 @@ void HypothesesSet::writeClusteringResultsFile(const char *fname) const
     exit(1);
   }
 
-  fprintf(fout, "cluster_id\thypothesis_id\tM1_acc\tM1_name\tM1_orientation\toffset\tM2_acc\tM2_name\tM2_orientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\tcluster_offset\tsimilarity_annotation\n");
+  fprintf(fout, "cluster_id\thypothesis_id\tM0_acc\tM0_name\tM0_orientation\toffset\tM1_acc\tM1_name\tM1_orientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM0_inf_content\tM1_inf_content\toverlap_inf_content\tM0_inf_contribution\tM1_inf_contribution\tlog10_raw_p_value\tlog10_p_value\tcluster_offset\tsimilarity_annotation\n");
 
   for (vector<Hypothesis *>::const_iterator it_ptr = clustered_hypotheses.begin(); it_ptr != clustered_hypotheses.end(); it_ptr++)
   {
@@ -630,44 +630,44 @@ void HypothesesSet::writeClusteringResultsFile(const char *fname) const
 
     if (it->clustering_status == STATUS_REJECTED) continue;
 
-    bool M1_goes_first, M1_same_orientation, M2_same_orientation, similarity_same_orientation;
+    bool M0_goes_first, M0_same_orientation, M1_same_orientation, similarity_same_orientation;
     int offset, similarity_offset;
 
     if (it->cluster_same_orientation)
     {
-      M1_goes_first = it->M1_goes_first;
-      M1_same_orientation = true;
-      M2_same_orientation = it->same_orientation;
+      M0_goes_first = it->M0_goes_first;
+      M0_same_orientation = true;
+      M1_same_orientation = it->same_orientation;
       offset = it->offset;
       similarity_same_orientation = it->similarity.same_orientation;
       similarity_offset = it->similarity.offset;
     }
     else
     {
-      M1_goes_first = !it->M1_goes_first;
-      M1_same_orientation = false;
-      M2_same_orientation = !it->same_orientation;
-      offset = it->M1->length - it->offset - it->M2->length;
+      M0_goes_first = !it->M0_goes_first;
+      M0_same_orientation = false;
+      M1_same_orientation = !it->same_orientation;
+      offset = it->M0->length - it->offset - it->M1->length;
       similarity_same_orientation = !it->similarity.same_orientation;
       similarity_offset = it->pair_end - it->pair_start - it->similarity.offset - it->similarity.motif->length;
     }
 
     fprintf(fout, "%d\t%ld\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t",
       it->cluster_id, it->hypothesis_id,
-      M1_goes_first ? it->M1->accession.c_str() : it->M2->accession.c_str(),
-      M1_goes_first ? it->M1->name.c_str() : it->M2->name.c_str(),
-      M1_goes_first ? ots(M1_same_orientation) : ots(M2_same_orientation),
-      M1_goes_first ? offset : -offset,
-      M1_goes_first ? it->M2->accession.c_str() : it->M1->accession.c_str(),
-      M1_goes_first ? it->M2->name.c_str() : it->M1->name.c_str(),
-      M1_goes_first ? ots(M2_same_orientation) : ots(M1_same_orientation),
+      M0_goes_first ? it->M0->accession.c_str() : it->M1->accession.c_str(),
+      M0_goes_first ? it->M0->name.c_str() : it->M1->name.c_str(),
+      M0_goes_first ? ots(M0_same_orientation) : ots(M1_same_orientation),
+      M0_goes_first ? offset : -offset,
+      M0_goes_first ? it->M1->accession.c_str() : it->M0->accession.c_str(),
+      M0_goes_first ? it->M1->name.c_str() : it->M0->name.c_str(),
+      M0_goes_first ? ots(M1_same_orientation) : ots(M0_same_orientation),
       Genome::dataset_names[it->dataset_id].c_str(),
       it->target_instances, it->target_N, it->control_instances, it->control_N, it->freq_ratio, log(it->prob) / log(10), it->fold_change,
-      M1_goes_first ? it->M1->inf_content : it->M2->inf_content,
-      M1_goes_first ? it->M2->inf_content : it->M1->inf_content,
+      M0_goes_first ? it->M0->inf_content : it->M1->inf_content,
+      M0_goes_first ? it->M1->inf_content : it->M0->inf_content,
       it->overlap_inf_content,
-      M1_goes_first ? it->M1_inf_contribution : it->M2_inf_contribution,
-      M1_goes_first ? it->M2_inf_contribution : it->M1_inf_contribution,
+      M0_goes_first ? it->M0_inf_contribution : it->M1_inf_contribution,
+      M0_goes_first ? it->M1_inf_contribution : it->M0_inf_contribution,
       get_log10_raw_p_value(*it), get_log10_p_value(*it), it->cluster_offset);
 
     if (it->similarity.distance < spec.Options.ClusteringDistanceConstant + it->dimer.inf_content * spec.Options.ClusteringDistanceMultiplier)
@@ -702,31 +702,31 @@ void HypothesesSet::writeDimerMotifsFile(const char *fname) const
 
     if (spec.Options.OutputDimerMotifs == OUTPUT_RANGE_SIGNATURE && it->clustering_status != STATUS_CLUSTER_SEED && it->clustering_status != STATUS_JOINED_BY_IDENTITY) continue;
 
-    bool M1_goes_first, M1_same_orientation, M2_same_orientation;
+    bool M0_goes_first, M0_same_orientation, M1_same_orientation;
     int offset;
 
     if (it->cluster_same_orientation)
     {
-      M1_goes_first = it->M1_goes_first;
-      M1_same_orientation = true;
-      M2_same_orientation = it->same_orientation;
+      M0_goes_first = it->M0_goes_first;
+      M0_same_orientation = true;
+      M1_same_orientation = it->same_orientation;
       offset = it->offset;
     }
     else
     {
-      M1_goes_first = !it->M1_goes_first;
-      M1_same_orientation = false;
-      M2_same_orientation = !it->same_orientation;
-      offset = it->M1->length - it->offset - it->M2->length;
+      M0_goes_first = !it->M0_goes_first;
+      M0_same_orientation = false;
+      M1_same_orientation = !it->same_orientation;
+      offset = it->M0->length - it->offset - it->M1->length;
     }
 
     fprintf(fout, "AC  cluster_%d_motif_complex_%d\nXX\nID  %s_%s_%d_%s_%s_%s\nXX\nNA  hypothesis_%ld\nXX\nP0\tA\tC\tG\tT\n",
       it->cluster_id, cluster_seq,
-      M1_goes_first ? it->M1->accession.c_str() : it->M2->accession.c_str(),
-      M1_goes_first ? ots(M1_same_orientation) : ots(M2_same_orientation),
-      M1_goes_first ? offset : -offset,
-      M1_goes_first ? it->M2->accession.c_str() : it->M1->accession.c_str(),
-      M1_goes_first ? ots(M2_same_orientation) : ots(M1_same_orientation),
+      M0_goes_first ? it->M0->accession.c_str() : it->M1->accession.c_str(),
+      M0_goes_first ? ots(M0_same_orientation) : ots(M1_same_orientation),
+      M0_goes_first ? offset : -offset,
+      M0_goes_first ? it->M1->accession.c_str() : it->M0->accession.c_str(),
+      M0_goes_first ? ots(M1_same_orientation) : ots(M0_same_orientation),
       Genome::dataset_names[it->dataset_id].c_str(),
       it->hypothesis_id);
 

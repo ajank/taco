@@ -400,7 +400,7 @@ int main(int argc, char *argv[])
   cout << endl << "Predicting cell-type-specific overrepresented motif complexes..." << endl;
   for (vector<Specification::ScopeSection>::iterator it = spec.Scope.begin(); it != spec.Scope.end(); it++)
   {
-    // insert all combinations of (M1, M2) into the parameter queue
+    // insert all combinations of (M0, M1) into the parameter queue
     for (vector<PositionWeightMatrix>::iterator jt = motifs.begin(); jt != motifs.end(); jt++)
       for (vector<PositionWeightMatrix>::iterator kt = jt; kt != motifs.end(); kt++)
       {
@@ -424,7 +424,7 @@ int main(int argc, char *argv[])
       if (it->Dataset.empty() || it->Dataset.find(Genome::dataset_names[jt->first]) != it->Dataset.end())
         target_datasets_scope[jt->first] = &jt->second;
 
-    // main experiment processing: consider all the combinations of (M1, M2, dataset)
+    // main experiment processing: consider all the combinations of (M0, M1, dataset)
     for (int i = 0; i < spec.Options.NumberOfThreads; i++)
       pthread_create(&pth[i], NULL, experimentThread, &hs);
     for (int i = 0; i < spec.Options.NumberOfThreads; i++)

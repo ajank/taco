@@ -46,15 +46,15 @@ class HypothesesSet
     struct Hypothesis
     {
       long int hypothesis_id, target_instances, target_N, control_instances, control_N;
-      double freq_ratio, prob, fold_change, overlap_inf_content, M1_inf_contribution, M2_inf_contribution;
+      double freq_ratio, prob, fold_change, overlap_inf_content, M0_inf_contribution, M1_inf_contribution;
       double raw_log_p_value, removal_raw_log_p_value;
 
-      PositionWeightMatrix *M1, *M2;
+      PositionWeightMatrix *M0, *M1;
       PositionWeightMatrix dimer;
       Hypothesis *removal_hypothesis;
 
-      vector<PositionWeightMatrix::MotifMatch> M1_paired_matches;
-      map<int, vector<PositionWeightMatrix::MotifMatch> > M1_spaced_matches;
+      vector<PositionWeightMatrix::MotifMatch> M0_paired_matches;
+      map<int, vector<PositionWeightMatrix::MotifMatch> > M0_spaced_matches;
 
       struct
       {
@@ -66,7 +66,7 @@ class HypothesesSet
 
       int dataset_id, offset, pair_start, pair_end;
       int clustering_status, cluster_id, cluster_offset;
-      bool same_orientation, M1_goes_first, cluster_same_orientation;
+      bool same_orientation, M0_goes_first, cluster_same_orientation;
 
       bool operator<(const Hypothesis &other) const;
       static bool ptr_compare(const Hypothesis *lhs, const Hypothesis *rhs);
@@ -81,7 +81,7 @@ class HypothesesSet
 
     const Specification &spec;
     HypothesesSet(const Specification &spec);
-    void processPair(PositionWeightMatrix *M1, PositionWeightMatrix *M2, const map<int, const NarrowPeak *> &target_datasets, const NarrowPeak *control_dataset);
+    void processPair(PositionWeightMatrix *M0, PositionWeightMatrix *M1, const map<int, const NarrowPeak *> &target_datasets, const NarrowPeak *control_dataset);
     void removeInsignificantHypotheses();
     long int getNumberOfHypotheses() const;
     long int getNumberOfAcceptedHypotheses() const;
@@ -116,12 +116,12 @@ class HypothesesSet
 
 inline int HypothesesSet::Hypothesis::get_start(const PositionWeightMatrix::MotifMatch &mm) const
 {
-  return (mm.strand == '+') ? mm.start + pair_start : mm.start + M1->length - pair_end;
+  return (mm.strand == '+') ? mm.start + pair_start : mm.start + M0->length - pair_end;
 }
 
 inline int HypothesesSet::Hypothesis::get_end(const PositionWeightMatrix::MotifMatch &mm) const
 {
-  return (mm.strand == '+') ? mm.start + pair_end : mm.start + M1->length - pair_start;
+  return (mm.strand == '+') ? mm.start + pair_end : mm.start + M0->length - pair_start;
 }
 
 inline int HypothesesSet::Hypothesis::get_length() const
