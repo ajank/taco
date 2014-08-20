@@ -261,12 +261,9 @@ void HypothesesSet::processPair(PositionWeightMatrix *M0, PositionWeightMatrix *
         {
           int size = abs(h.parts[1].offset + M1->length / 2 - M0->length / 2); // for calculating motif midpoints, cf. PositionWeightMatrix::scan
 
-          Stats *target = ss_target.getStats(h.parts[1].offset, h.parts[1].orientation);
-          Stats *control = ss_control.getStats(h.parts[1].offset, h.parts[1].orientation);
-
-          h.target_instances = target->getHits();
+          h.target_instances = ss_target.getStats(h.parts[1].offset, h.parts[1].orientation);
           h.target_N = target_dataset->location_dist[size];
-          h.control_instances = control->getHits();
+          h.control_instances = ss_control.getStats(h.parts[1].offset, h.parts[1].orientation);
           h.control_N = control_dataset->location_dist[size];
           h.calculateStructure();
 

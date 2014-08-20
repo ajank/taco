@@ -26,17 +26,6 @@
 
 using namespace std;
 
-class Stats
-{
-  public:
-    Stats();
-    void addHit();
-    long int getHits() const;
-
-  private:
-    long int hits;
-};
-
 class StatsSet
 {
   public:
@@ -50,7 +39,7 @@ class StatsSet
     int offset_shift_same, offset_shift_opposite;
 
     void addHit(int offset, bool same_orientation);
-    Stats *getStats(int offset, bool same_orientation) const;
+    long int getStats(int offset, bool same_orientation) const;
     long int getMaximumStats(int *returned_offset, bool *returned_same_orientation) const;
     void calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M0_matches, const vector<PositionWeightMatrix::MotifMatch> &M1_matches);
 
@@ -61,24 +50,9 @@ class StatsSet
   private:
     void initialize_carriers();
     void copy_constants(const StatsSet &other);
-    Stats *same, *opposite;
-    vector<Stats> same_carrier, opposite_carrier;
+    long int *same, *opposite;
+    vector<long int> same_carrier, opposite_carrier;
 };
-
-inline Stats::Stats()
-{
-  hits = 0;
-}
-
-inline void Stats::addHit()
-{
-  hits++;
-}
-
-inline long int Stats::getHits() const
-{
-  return hits;
-}
 
 inline void StatsSet::calculateStats()
 {
