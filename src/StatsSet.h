@@ -31,6 +31,8 @@ class StatsSet
   public:
     StatsSet(PositionWeightMatrix *M0, PositionWeightMatrix *M1, int margin);
     StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2, int margin);
+    StatsSet(const StatsSet &other);
+    StatsSet &operator= (const StatsSet &other);
 
     PositionWeightMatrix *M0, *M1;
     vector<PositionWeightMatrix::MotifMatch> M0_filtered_matches, M1_filtered_matches;
@@ -47,10 +49,13 @@ class StatsSet
     void calculateStats();
     void returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_paired_matches, int offset, bool same_orientation) const;
 
+    ~StatsSet();
+
   private:
     void initialize_carriers();
-    long int *same, *opposite;
-    vector<long int> same_carrier, opposite_carrier;
+    void copy_constants(const StatsSet &other);
+    long int *same, *same_carrier;
+    long int *opposite, *opposite_carrier;
 };
 
 inline void StatsSet::calculateStats()

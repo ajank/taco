@@ -51,12 +51,53 @@ StatsSet::StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2,
   initialize_carriers();
 }
 
+StatsSet::StatsSet(const StatsSet &other)
+{
+  copy_constants(other);
+  initialize_carriers();
+  copy(other.same_carrier, other.same_carrier + max_offset - min_offset + 1, same_carrier);
+  copy(other.opposite_carrier, other.opposite_carrier + max_offset - min_offset + 1, opposite_carrier);
+}
+
+StatsSet &StatsSet::operator= (const StatsSet &other)
+{
+  copy_constants(other);
+
+  long int *same_carrier_temp = new long int[max_offset - min_offset + 1];
+  copy(other.same_carrier, other.same_carrier + max_offset - min_offset + 1, same_carrier_temp);
+  delete[] same_carrier;
+  same_carrier = same_carrier_temp;
+  same = same_carrier - min_offset;
+
+  long int *opposite_carrier_temp = new long int[max_offset - min_offset + 1];
+  copy(other.opposite_carrier, other.opposite_carrier + max_offset - min_offset + 1, opposite_carrier_temp);
+  delete[] opposite_carrier;
+  opposite_carrier = opposite_carrier_temp;
+  opposite = opposite_carrier - min_offset;
+
+  return *this;
+}
+
 void StatsSet::initialize_carriers()
 {
-  same_carrier.resize(max_offset - min_offset + 1);
-  same = &same_carrier[0] - min_offset;
-  opposite_carrier.resize(max_offset - min_offset + 1);
-  opposite = &opposite_carrier[0] - min_offset;
+  same_carrier = new long int[max_offset - min_offset + 1](); // all zero initialised
+  same = same_carrier - min_offset;
+  opposite_carrier = new long int[max_offset - min_offset + 1](); // all zero initialised
+  opposite = opposite_carrier - min_offset;
+}
+
+void StatsSet::copy_constants(const StatsSet &other)
+{
+  M0 = other.M0;
+  M1 = other.M1;
+  min_offset = other.min_offset;
+  min_offset_same = other.min_offset_same;
+  min_offset_opposite = other.min_offset_opposite;
+  max_offset = other.max_offset;
+  max_offset_same = other.max_offset_same;
+  max_offset_opposite = other.max_offset_opposite;
+  offset_shift_same = other.offset_shift_same;
+  offset_shift_opposite = other.offset_shift_opposite;
 }
 
 void StatsSet::addHit(int offset, bool same_orientation)
@@ -213,4 +254,10 @@ void StatsSet::returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_
           M0_paired_matches.push_back(*irt);
     }
   }
+}
+
+StatsSet::~StatsSet()
+{
+  delete[] same_carrier;
+  delete[] opposite_carrier;
 }
