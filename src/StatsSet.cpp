@@ -59,20 +59,6 @@ void StatsSet::initialize_carriers()
   opposite = &opposite_carrier[0] - min_offset;
 }
 
-void StatsSet::copy_constants(const StatsSet &other)
-{
-  M0 = other.M0;
-  M1 = other.M1;
-  min_offset = other.min_offset;
-  min_offset_same = other.min_offset_same;
-  min_offset_opposite = other.min_offset_opposite;
-  max_offset = other.max_offset;
-  max_offset_same = other.max_offset_same;
-  max_offset_opposite = other.max_offset_opposite;
-  offset_shift_same = other.offset_shift_same;
-  offset_shift_opposite = other.offset_shift_opposite;
-}
-
 void StatsSet::addHit(int offset, bool same_orientation)
 {
   if (min_offset <= offset && offset <= max_offset)

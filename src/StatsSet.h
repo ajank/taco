@@ -49,7 +49,6 @@ class StatsSet
 
   private:
     void initialize_carriers();
-    void copy_constants(const StatsSet &other);
     long int *same, *opposite;
     vector<long int> same_carrier, opposite_carrier;
 };
