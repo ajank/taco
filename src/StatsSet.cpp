@@ -51,39 +51,12 @@ StatsSet::StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2,
   initialize_carriers();
 }
 
-StatsSet::StatsSet(const StatsSet &other)
-{
-  copy_constants(other);
-  initialize_carriers();
-  copy(other.same_carrier, other.same_carrier + max_offset - min_offset + 1, same_carrier);
-  copy(other.opposite_carrier, other.opposite_carrier + max_offset - min_offset + 1, opposite_carrier);
-}
-
-StatsSet &StatsSet::operator= (const StatsSet &other)
-{
-  copy_constants(other);
-
-  Stats *same_carrier_temp = new Stats[max_offset - min_offset + 1];
-  copy(other.same_carrier, other.same_carrier + max_offset - min_offset + 1, same_carrier_temp);
-  delete[] same_carrier;
-  same_carrier = same_carrier_temp;
-  same = same_carrier - min_offset;
-
-  Stats *opposite_carrier_temp = new Stats[max_offset - min_offset + 1];
-  copy(other.opposite_carrier, other.opposite_carrier + max_offset - min_offset + 1, opposite_carrier_temp);
-  delete[] opposite_carrier;
-  opposite_carrier = opposite_carrier_temp;
-  opposite = opposite_carrier - min_offset;
-
-  return *this;
-}
-
 void StatsSet::initialize_carriers()
 {
-  same_carrier = new Stats[max_offset - min_offset + 1];
-  same = same_carrier - min_offset;
-  opposite_carrier = new Stats[max_offset - min_offset + 1];
-  opposite = opposite_carrier - min_offset;
+  same_carrier.resize(max_offset - min_offset + 1);
+  same = &same_carrier[0] - min_offset;
+  opposite_carrier.resize(max_offset - min_offset + 1);
+  opposite = &opposite_carrier[0] - min_offset;
 }
 
 void StatsSet::copy_constants(const StatsSet &other)
@@ -254,10 +227,4 @@ void StatsSet::returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_
           M0_paired_matches.push_back(*irt);
     }
   }
-}
-
-StatsSet::~StatsSet()
-{
-  delete[] same_carrier;
-  delete[] opposite_carrier;
 }
