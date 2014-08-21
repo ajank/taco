@@ -257,7 +257,7 @@ void HypothesesSet::processPair(PositionWeightMatrix *M0, PositionWeightMatrix *
       for (vector<bool>::const_iterator jt = orientations->begin(); jt != orientations->end(); jt++)
       {
         h.parts[1].orientation = *jt;
-        for (h.parts[1].offset = ss_target.min_offset; h.parts[1].offset <= ss_target.max_offset; h.parts[1].offset++)
+        for (h.parts[1].offset = ss_target.stats.min_offset; h.parts[1].offset <= ss_target.stats.max_offset; h.parts[1].offset++)
         {
           int size = abs(h.parts[1].offset + M1->length / 2 - M0->length / 2); // for calculating motif midpoints, cf. PositionWeightMatrix::scan
 

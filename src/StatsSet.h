@@ -26,19 +26,34 @@
 
 using namespace std;
 
+class Stats
+{
+  public:
+    Stats();
+    void addHit();
+    long int getHits() const;
+
+  private:
+    long int hits; // either count the number of hits if we reached the arity...
+ 
+  public:
+    // or go one step down:
+    Stats *same, *opposite;
+    vector<Stats> same_carrier, opposite_carrier;
+    int min_offset, min_offset_same, min_offset_opposite;
+    int max_offset, max_offset_same, max_offset_opposite;
+};
+
 class StatsSet
 {
   public:
     StatsSet(PositionWeightMatrix *M0, PositionWeightMatrix *M1, int margin);
     StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2, int margin);
-    StatsSet(const StatsSet &other);
-    StatsSet &operator= (const StatsSet &other);
 
     PositionWeightMatrix *M0, *M1;
     vector<PositionWeightMatrix::MotifMatch> M0_filtered_matches, M1_filtered_matches;
-    int min_offset, min_offset_same, min_offset_opposite;
-    int max_offset, max_offset_same, max_offset_opposite;
     int offset_shift_same, offset_shift_opposite;
+    Stats stats;
 
     void addHit(int offset, bool same_orientation);
     long int getStats(int offset, bool same_orientation) const;
@@ -49,14 +64,24 @@ class StatsSet
     void calculateStats();
     void returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_paired_matches, int offset, bool same_orientation) const;
 
-    ~StatsSet();
-
   private:
     void initialize_carriers();
-    void copy_constants(const StatsSet &other);
-    long int *same, *same_carrier;
-    long int *opposite, *opposite_carrier;
 };
+
+inline Stats::Stats()
+{
+  hits = 0;
+}
+
+inline void Stats::addHit()
+{
+  hits++;
+}
+
+inline long int Stats::getHits() const
+{
+  return hits;
+}
 
 inline void StatsSet::calculateStats()
 {

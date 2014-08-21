@@ -26,8 +26,8 @@ StatsSet::StatsSet(PositionWeightMatrix *M0, PositionWeightMatrix *M1, int margi
 {
   StatsSet::M0 = M0;
   StatsSet::M1 = M1;
-  min_offset = min_offset_same = min_offset_opposite = -M1->length - margin;
-  max_offset = max_offset_same = max_offset_opposite = M0->length + margin;
+  stats.min_offset = stats.min_offset_same = stats.min_offset_opposite = -M1->length - margin;
+  stats.max_offset = stats.max_offset_same = stats.max_offset_opposite = M0->length + margin;
   offset_shift_same = offset_shift_opposite = 0;
   initialize_carriers();
 }
@@ -37,13 +37,13 @@ StatsSet::StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2,
   StatsSet::M0 = h1->parts[0].M;
   StatsSet::M1 = h2->parts[0].M;
 
-  min_offset_same = h1->pair_start - h2->pair_end - margin;
-  min_offset_opposite = h1->pair_start - (h2->parts[0].M->length - h2->pair_start) - margin;
-  min_offset = min(min_offset_same, min_offset_opposite);
+  stats.min_offset_same = h1->pair_start - h2->pair_end - margin;
+  stats.min_offset_opposite = h1->pair_start - (h2->parts[0].M->length - h2->pair_start) - margin;
+  stats.min_offset = min(stats.min_offset_same, stats.min_offset_opposite);
 
-  max_offset_same = h1->pair_end - h2->pair_start + margin;
-  max_offset_opposite = h1->pair_end - (h2->parts[0].M->length - h2->pair_end) + margin;
-  max_offset = max(max_offset_same, max_offset_opposite);
+  stats.max_offset_same = h1->pair_end - h2->pair_start + margin;
+  stats.max_offset_opposite = h1->pair_end - (h2->parts[0].M->length - h2->pair_end) + margin;
+  stats.max_offset = max(stats.max_offset_same, stats.max_offset_opposite);
 
   offset_shift_same = h2->pair_start - h1->pair_start;
   offset_shift_opposite = (h2->parts[0].M->length - h2->pair_end) - h1->pair_start;
@@ -51,78 +51,37 @@ StatsSet::StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2,
   initialize_carriers();
 }
 
-StatsSet::StatsSet(const StatsSet &other)
-{
-  copy_constants(other);
-  initialize_carriers();
-  copy(other.same_carrier, other.same_carrier + max_offset - min_offset + 1, same_carrier);
-  copy(other.opposite_carrier, other.opposite_carrier + max_offset - min_offset + 1, opposite_carrier);
-}
-
-StatsSet &StatsSet::operator= (const StatsSet &other)
-{
-  copy_constants(other);
-
-  long int *same_carrier_temp = new long int[max_offset - min_offset + 1];
-  copy(other.same_carrier, other.same_carrier + max_offset - min_offset + 1, same_carrier_temp);
-  delete[] same_carrier;
-  same_carrier = same_carrier_temp;
-  same = same_carrier - min_offset;
-
-  long int *opposite_carrier_temp = new long int[max_offset - min_offset + 1];
-  copy(other.opposite_carrier, other.opposite_carrier + max_offset - min_offset + 1, opposite_carrier_temp);
-  delete[] opposite_carrier;
-  opposite_carrier = opposite_carrier_temp;
-  opposite = opposite_carrier - min_offset;
-
-  return *this;
-}
-
 void StatsSet::initialize_carriers()
 {
-  same_carrier = new long int[max_offset - min_offset + 1](); // all zero initialised
-  same = same_carrier - min_offset;
-  opposite_carrier = new long int[max_offset - min_offset + 1](); // all zero initialised
-  opposite = opposite_carrier - min_offset;
-}
-
-void StatsSet::copy_constants(const StatsSet &other)
-{
-  M0 = other.M0;
-  M1 = other.M1;
-  min_offset = other.min_offset;
-  min_offset_same = other.min_offset_same;
-  min_offset_opposite = other.min_offset_opposite;
-  max_offset = other.max_offset;
-  max_offset_same = other.max_offset_same;
-  max_offset_opposite = other.max_offset_opposite;
-  offset_shift_same = other.offset_shift_same;
-  offset_shift_opposite = other.offset_shift_opposite;
+  stats.same_carrier.resize(stats.max_offset - stats.min_offset + 1);
+  stats.same = &stats.same_carrier[0] - stats.min_offset;
+  stats.opposite_carrier.resize(stats.max_offset - stats.min_offset + 1);
+  stats.opposite = &stats.opposite_carrier[0] - stats.min_offset;
 }
 
 void StatsSet::addHit(int offset, bool same_orientation)
 {
-  if (min_offset <= offset && offset <= max_offset)
+  if (stats.min_offset <= offset && offset <= stats.max_offset)
   {
     if (same_orientation)
-      same[offset]++;
+      stats.same[offset].addHit();
     else
-      opposite[offset]++;
+      stats.opposite[offset].addHit();
   }
 }
 
 long int StatsSet::getStats(int offset, bool same_orientation) const
 {
-  if (min_offset <= offset && offset <= max_offset)
+  if (stats.min_offset <= offset && offset <= stats.max_offset)
   {
     if (same_orientation)
-      return same[offset];
+      return stats.same[offset].getHits();
     else
-      return opposite[offset];
+      return stats.opposite[offset].getHits();
   }
   else
   {
-    cerr << "StatsSet: offset " << offset << " beyond range [" << min_offset << ", " << max_offset << "]" << endl;
+    cerr << "StatsSet: offset " << offset << " beyond range [" << stats.min_offset << ", " << stats.max_offset << "]" << endl;
     exit(1);
   }
 }
@@ -131,18 +90,18 @@ long int StatsSet::getMaximumStats(int *returned_offset, bool *returned_same_ori
 {
   long int hits = -1;
 
-  for (int offset = min_offset_same; offset <= max_offset_same; offset++)
-    if (same[offset] > hits)
+  for (int offset = stats.min_offset_same; offset <= stats.max_offset_same; offset++)
+    if (stats.same[offset].getHits() > hits)
     {
-      hits = same[offset];
+      hits = stats.same[offset].getHits();
       *returned_offset = offset + offset_shift_same;
       *returned_same_orientation = true;
     }
 
-  for (int offset = min_offset_opposite; offset <= max_offset_opposite; offset++)
-    if (opposite[offset] > hits)
+  for (int offset = stats.min_offset_opposite; offset <= stats.max_offset_opposite; offset++)
+    if (stats.opposite[offset].getHits() > hits)
     {
-      hits = opposite[offset];
+      hits = stats.opposite[offset].getHits();
       *returned_offset = offset + offset_shift_opposite;
       *returned_same_orientation = false;
     }
@@ -187,31 +146,31 @@ void StatsSet::calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M0
 
 /* We need to filter jrts. There are two cases:
 (1) same orientation: looking for jrts satisfying
-      min_offset <= jrt->start - irt->start <= max_offset
-      irt->start + min_offset <= jrt->start <= irt->start + max_offset
+      stats.min_offset <= jrt->start - irt->start <= stats.max_offset
+      irt->start + stats.min_offset <= jrt->start <= irt->start + stats.max_offset
 
 (2) opposite orientation: looking for jrts satisfying
-      min_offset <= irt->end - jrt->end <= max_offset
-      min_offset <= irt->start + M0->length - jrt->start - M1->length <= max_offset
-      - max_offset <= - irt->start - M0->length + jrt->start + M1->length <= - min_offset
-      irt->start + M0->length - M1->length - max_offset <= jrt->start <= irt->start + M0->length - M1->length - min_offset
-      irt->start + M0->length - M1->length - max_offset <= jrt->start <= irt->start + M0->length - M1->length - min_offset
+      stats.min_offset <= irt->end - jrt->end <= stats.max_offset
+      stats.min_offset <= irt->start + M0->length - jrt->start - M1->length <= stats.max_offset
+      - stats.max_offset <= - irt->start - M0->length + jrt->start + M1->length <= - stats.min_offset
+      irt->start + M0->length - M1->length - stats.max_offset <= jrt->start <= irt->start + M0->length - M1->length - stats.min_offset
+      irt->start + M0->length - M1->length - stats.max_offset <= jrt->start <= irt->start + M0->length - M1->length - stats.min_offset
     but
-      M0->length - M1->length - max_offset = M0->length - M1->length - M0->length - margin + 1 = min_offset
-      M0->length - M1->length - min_offset = M0->length - M1->length + M1->length + margin - 1 = max_offset
+      M0->length - M1->length - stats.max_offset = M0->length - M1->length - M0->length - margin + 1 = stats.min_offset
+      M0->length - M1->length - stats.min_offset = M0->length - M1->length + M1->length + margin - 1 = stats.max_offset
     so the above inequalities are equivalent to
-      irt->start + min_offset <= jrt->start <= irt->start + max_offset. */
+      irt->start + stats.min_offset <= jrt->start <= irt->start + stats.max_offset. */
 
   for (vector<PositionWeightMatrix::MotifMatch>::const_iterator irt = M0_matches.begin(); irt != M0_matches.end(); irt++)
   {
     while (jrt_head != M1_matches.end() && jrt_head->chrom_id < irt->chrom_id)
       jrt_head++;
-    while (jrt_head != M1_matches.end() && jrt_head->chrom_id == irt->chrom_id && jrt_head->start < irt->start + min_offset)
+    while (jrt_head != M1_matches.end() && jrt_head->chrom_id == irt->chrom_id && jrt_head->start < irt->start + stats.min_offset)
       jrt_head++;
 
     while (jrt_tail != M1_matches.end() && jrt_tail->chrom_id < irt->chrom_id)
       jrt_tail++;
-    while (jrt_tail != M1_matches.end() && jrt_tail->chrom_id == irt->chrom_id && jrt_tail->start <= irt->start + max_offset)
+    while (jrt_tail != M1_matches.end() && jrt_tail->chrom_id == irt->chrom_id && jrt_tail->start <= irt->start + stats.max_offset)
       jrt_tail++;
 
     for (vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt = jrt_head; jrt != jrt_tail; jrt++)
@@ -233,12 +192,12 @@ void StatsSet::returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_
   {
     while (jrt_head != M1_filtered_matches.end() && jrt_head->chrom_id < irt->chrom_id)
       jrt_head++;
-    while (jrt_head != M1_filtered_matches.end() && jrt_head->chrom_id == irt->chrom_id && jrt_head->start < irt->start + min_offset)
+    while (jrt_head != M1_filtered_matches.end() && jrt_head->chrom_id == irt->chrom_id && jrt_head->start < irt->start + stats.min_offset)
       jrt_head++;
 
     while (jrt_tail != M1_filtered_matches.end() && jrt_tail->chrom_id < irt->chrom_id)
       jrt_tail++;
-    while (jrt_tail != M1_filtered_matches.end() && jrt_tail->chrom_id == irt->chrom_id && jrt_tail->start <= irt->start + max_offset)
+    while (jrt_tail != M1_filtered_matches.end() && jrt_tail->chrom_id == irt->chrom_id && jrt_tail->start <= irt->start + stats.max_offset)
       jrt_tail++;
 
     if (irt->strand == '+')
@@ -254,10 +213,4 @@ void StatsSet::returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_
           M0_paired_matches.push_back(*irt);
     }
   }
-}
-
-StatsSet::~StatsSet()
-{
-  delete[] same_carrier;
-  delete[] opposite_carrier;
 }
