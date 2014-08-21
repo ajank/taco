@@ -64,9 +64,9 @@ void StatsSet::addHit(int offset, bool same_orientation)
   if (stats.min_offset <= offset && offset <= stats.max_offset)
   {
     if (same_orientation)
-      stats.same[offset].addHit();
+      stats.hits_same[offset]++;
     else
-      stats.opposite[offset].addHit();
+      stats.hits_opposite[offset]++;
   }
 }
 
@@ -75,9 +75,9 @@ long int StatsSet::getStats(int offset, bool same_orientation) const
   if (stats.min_offset <= offset && offset <= stats.max_offset)
   {
     if (same_orientation)
-      return stats.same[offset].getHits();
+      return stats.hits_same[offset];
     else
-      return stats.opposite[offset].getHits();
+      return stats.hits_opposite[offset];
   }
   else
   {
@@ -91,17 +91,17 @@ long int StatsSet::getMaximumStats(int *returned_offset, bool *returned_same_ori
   long int hits = -1;
 
   for (int offset = stats.min_offset_same; offset <= stats.max_offset_same; offset++)
-    if (stats.same[offset].getHits() > hits)
+    if (stats.hits_same[offset] > hits)
     {
-      hits = stats.same[offset].getHits();
+      hits = stats.hits_same[offset];
       *returned_offset = offset + offset_shift_same;
       *returned_same_orientation = true;
     }
 
   for (int offset = stats.min_offset_opposite; offset <= stats.max_offset_opposite; offset++)
-    if (stats.opposite[offset].getHits() > hits)
+    if (stats.hits_opposite[offset] > hits)
     {
-      hits = stats.opposite[offset].getHits();
+      hits = stats.hits_opposite[offset];
       *returned_offset = offset + offset_shift_opposite;
       *returned_same_orientation = false;
     }

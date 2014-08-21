@@ -29,17 +29,13 @@ using namespace std;
 class Stats
 {
   public:
-    Stats();
-    void addHit();
-    long int getHits() const;
+    long int *hits_same, *hits_opposite; // either count the number of hits if we reached the arity...
+    vector<long int> hits_same_carrier, hits_opposite_carrier;
 
-  private:
-    long int hits; // either count the number of hits if we reached the arity...
- 
-  public:
-    // or go one step down:
-    Stats *same, *opposite;
+    Stats *same, *opposite; // ...or go one step down, increasing the arity
     vector<Stats> same_carrier, opposite_carrier;
+
+    // in both of the cases, follow the limits:
     int min_offset, min_offset_same, min_offset_opposite;
     int max_offset, max_offset_same, max_offset_opposite;
 };
@@ -67,21 +63,6 @@ class StatsSet
   private:
     void initialize_carriers();
 };
-
-inline Stats::Stats()
-{
-  hits = 0;
-}
-
-inline void Stats::addHit()
-{
-  hits++;
-}
-
-inline long int Stats::getHits() const
-{
-  return hits;
-}
 
 inline void StatsSet::calculateStats()
 {
