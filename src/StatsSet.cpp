@@ -22,41 +22,207 @@
 
 #include "StatsSet.h"
 
+void Stats::initialize_hits_carriers()
+{
+  hits_same_carrier.resize(max_offset - min_offset + 1);
+  hits_same = &hits_same_carrier[0] - min_offset;
+  hits_opposite_carrier.resize(max_offset - min_offset + 1);
+  hits_opposite = &hits_opposite_carrier[0] - min_offset;
+}
+
+void Stats::initialize_stats_carriers()
+{
+  same_carrier.resize(max_offset - min_offset + 1);
+  same = &same_carrier[0] - min_offset;
+  opposite_carrier.resize(max_offset - min_offset + 1);
+  opposite = &opposite_carrier[0] - min_offset;
+}
+
+StatsSet::StatsSet(const vector<PositionWeightMatrix *> Mi, int margin)
+{
+  arity = Mi.size();
+  if (arity < 2)
+  {
+    cerr << "StatsSet: arity < 2" << endl;
+    exit(1);
+  }
+
+  StatsSet::Mi = Mi;
+  Mi_filtered_matches.resize(arity);
+  min_offset.resize(arity - 1);
+  max_offset.resize(arity - 1);
+  initialize_stats(stats, 1, 0, Mi[0]->length, margin);
+  for (int level = 1; level < arity; level++)
+  {
+    int i = level - 1;
+    cerr << "min_offset " << min_offset[i] << " max_offset " << max_offset[i] << endl;
+  }
+}
+
 StatsSet::StatsSet(PositionWeightMatrix *M0, PositionWeightMatrix *M1, int margin)
 {
-  StatsSet::M0 = M0;
-  StatsSet::M1 = M1;
+  arity = 2;
+  Mi.push_back(M0);
+  Mi.push_back(M1);
+  Mi_filtered_matches.resize(arity);
+
   stats.min_offset = stats.min_offset_same = stats.min_offset_opposite = -M1->length - margin;
+  min_offset.push_back(stats.min_offset);
+
   stats.max_offset = stats.max_offset_same = stats.max_offset_opposite = M0->length + margin;
+  max_offset.push_back(stats.max_offset);
+
   offset_shift_same = offset_shift_opposite = 0;
-  initialize_carriers();
+
+  stats.initialize_hits_carriers();
 }
 
 StatsSet::StatsSet(HypothesesSet::Hypothesis *h1, HypothesesSet::Hypothesis *h2, int margin)
 {
-  StatsSet::M0 = h1->parts[0].M;
-  StatsSet::M1 = h2->parts[0].M;
+  arity = 2;
+  Mi.push_back(h1->parts[0].M);
+  Mi.push_back(h2->parts[0].M);
+  Mi_filtered_matches.resize(arity);
 
   stats.min_offset_same = h1->pair_start - h2->pair_end - margin;
   stats.min_offset_opposite = h1->pair_start - (h2->parts[0].M->length - h2->pair_start) - margin;
   stats.min_offset = min(stats.min_offset_same, stats.min_offset_opposite);
+  min_offset.push_back(stats.min_offset);
 
   stats.max_offset_same = h1->pair_end - h2->pair_start + margin;
   stats.max_offset_opposite = h1->pair_end - (h2->parts[0].M->length - h2->pair_end) + margin;
   stats.max_offset = max(stats.max_offset_same, stats.max_offset_opposite);
+  max_offset.push_back(stats.max_offset);
 
   offset_shift_same = h2->pair_start - h1->pair_start;
   offset_shift_opposite = (h2->parts[0].M->length - h2->pair_end) - h1->pair_start;
 
-  initialize_carriers();
+  stats.initialize_hits_carriers();
 }
 
-void StatsSet::initialize_carriers()
+void StatsSet::initialize_stats(Stats &stats, int level, int pair_start, int pair_end, int margin)
 {
-  stats.same_carrier.resize(stats.max_offset - stats.min_offset + 1);
-  stats.same = &stats.same_carrier[0] - stats.min_offset;
-  stats.opposite_carrier.resize(stats.max_offset - stats.min_offset + 1);
-  stats.opposite = &stats.opposite_carrier[0] - stats.min_offset;
+  PositionWeightMatrix *M1 = Mi[level];
+
+  stats.min_offset = stats.min_offset_same = stats.min_offset_opposite = pair_start - M1->length - margin;
+  min_offset[level - 1] = min(min_offset[level - 1], stats.min_offset);
+
+  stats.max_offset = stats.max_offset_same = stats.max_offset_opposite = pair_end + margin;
+  max_offset[level - 1] = max(max_offset[level - 1], stats.max_offset);
+
+  offset_shift_same = offset_shift_opposite = 0;
+
+  if (level + 1 == arity)
+    stats.initialize_hits_carriers();
+  else
+  {
+    stats.initialize_stats_carriers();
+
+    for (int offset = stats.min_offset_same; offset <= stats.max_offset_same; offset++)
+      initialize_stats(stats.same[offset], level + 1, min(pair_start, offset), max(pair_end, M1->length + offset), margin);
+
+    for (int offset = stats.min_offset_opposite; offset <= stats.max_offset_opposite; offset++)
+      initialize_stats(stats.opposite[offset], level + 1, min(pair_start, offset), max(pair_end, M1->length + offset), margin);
+  }
+}
+
+void StatsSet::addHit(const vector<int> &offset, const vector<bool> &same_orientation)
+{
+  if ((int) offset.size() + 1 != arity)
+  {
+    cerr << "StatsSet: addHit: arity " << arity << ", but got offset length " << offset.size() << endl;
+    exit(1);
+  }
+
+  if ((int) same_orientation.size() + 1 != arity)
+  {
+    cerr << "StatsSet: addHit: arity " << arity << ", but got same_orientation length " << same_orientation.size() << endl;
+    exit(1);
+  }
+
+  Stats s = stats;
+  for (int level = 1; level < arity; level++)
+  {
+    int i = level - 1;
+    if (s.min_offset <= offset[i] && offset[i] <= s.max_offset)
+    {
+      if (level + 1 == arity)
+      {
+        if (same_orientation[i])
+          s.hits_same[offset[i]]++;
+        else
+          s.hits_opposite[offset[i]]++;
+      }
+      else
+      {
+        if (same_orientation[i])
+          s = s.same[offset[i]];
+        else
+          s = s.opposite[offset[i]];
+      }
+    }
+    else
+      break;
+  }
+}
+
+void StatsSet::addHit(vector<int> offset, vector<bool> same_orientation, int level, const vector<vector<PositionWeightMatrix::MotifMatch>::const_iterator> &jrt_head, const vector<vector<PositionWeightMatrix::MotifMatch>::const_iterator> &jrt_tail)
+{
+/*  cerr << "addHit";
+  for (int i = 0; i < offset.size(); i++) cerr << " " << offset[i];
+  cerr << " / ";
+  for (int i = 0; i < same_orientation.size(); i++) cerr << " " << same_orientation[i];
+  cerr << " / " << level << " / ";
+  //for (int i = 0; i < jrt_head.size(); i++) cerr << " " << jrt_head[i];
+  cerr << " / ";
+  //for (int i = 0; i < jrt_tail.size(); i++) cerr << " " << jrt_tail[i];
+  cerr << endl;*/
+
+  if ((int) same_orientation.size() + 1 != level)
+  {
+    cerr << "StatsSet: same_orientation length " << same_orientation.size() << " + 1 != level " << level << endl;
+    exit(1);
+  }
+
+  if ((int) offset.size() + 1 != level)
+  {
+    cerr << "StatsSet: offset length " << offset.size() << " + 1 != level " << level << endl;
+    exit(1);
+  }
+
+  if ((int) jrt_head.size() != arity)
+  {
+    cerr << "StatsSet: jrt_head length " << jrt_head.size() << " != arity " << arity << endl;
+    exit(1);
+  }
+
+  if ((int) jrt_tail.size() != arity)
+  {
+    cerr << "StatsSet: jrt_tail length " << jrt_tail.size() << " != arity " << arity << endl;
+    exit(1);
+  }
+
+  offset.push_back(int());
+  same_orientation.push_back(bool());
+
+  for (vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt = jrt_head[level]; jrt != jrt_tail[level]; jrt++)
+  {
+    if (jrt_head[0]->strand == '+')
+    {
+      offset.back() = jrt->start - jrt_head[0]->start;
+      same_orientation.back() = jrt->strand == '+';
+    }
+    else
+    {
+      offset.back() = jrt_head[0]->start + Mi[0]->length - jrt->start - Mi[level]->length;
+      same_orientation.back() = jrt->strand != '+';
+    }
+
+    if (level + 1 == arity)
+      addHit(offset, same_orientation);
+    else
+      addHit(offset, same_orientation, level + 1, jrt_head, jrt_tail);
+  }
 }
 
 void StatsSet::addHit(int offset, bool same_orientation)
@@ -111,36 +277,73 @@ long int StatsSet::getMaximumStats(int *returned_offset, bool *returned_same_ori
 
 void StatsSet::addMotifMatchesFromRegions(const NarrowPeak *regions)
 {
-  vector<PositionWeightMatrix::MotifMatch>::iterator M0_it = M0->matches.begin();
-  vector<PositionWeightMatrix::MotifMatch>::iterator M0_matches_end = M0->matches.end();
-  vector<PositionWeightMatrix::MotifMatch>::iterator M1_it = M1->matches.begin();
-  vector<PositionWeightMatrix::MotifMatch>::iterator M1_matches_end = M1->matches.end();
+  vector<vector<PositionWeightMatrix::MotifMatch>::iterator> Mi_it, Mi_matches_end;
+  for (int i = 0; i < arity; i++)
+  {
+    Mi_it.push_back(Mi[i]->matches.begin());
+    Mi_matches_end.push_back(Mi[i]->matches.end());
+  }
 
   for (list<NarrowPeak::Region>::const_iterator jt = regions->regions.begin(); jt != regions->regions.end(); jt++)
   {
-    // taking pseudo_start and pseudo_end, the frequencies will be comparable regardles of the region fragmentation
-    int jt_pseudo_start = jt->start - M0->length / 2;
-    int jt_pseudo_end = jt->end - M0->length / 2;
-    while (M0_it != M0_matches_end && M0_it->chrom_id < jt->chrom_id)
-      M0_it++;
-    while (M0_it != M0_matches_end && M0_it->chrom_id == jt->chrom_id && M0_it->start < jt_pseudo_start)
-      M0_it++;
-    while (M0_it != M0_matches_end && M0_it->chrom_id == jt->chrom_id && M0_it->start < jt_pseudo_end)
-      M0_filtered_matches.push_back(*M0_it++);
+    for (int i = 0; i < arity; i++)
+    {
+      // taking pseudo_start and pseudo_end, the frequencies will be comparable regardles of the region fragmentation
+      int jt_pseudo_start = jt->start - Mi[i]->length / 2;
+      int jt_pseudo_end = jt->end - Mi[i]->length / 2;
+      while (Mi_it[i] != Mi_matches_end[i] && Mi_it[i]->chrom_id < jt->chrom_id)
+        Mi_it[i]++;
+      while (Mi_it[i] != Mi_matches_end[i] && Mi_it[i]->chrom_id == jt->chrom_id && Mi_it[i]->start < jt_pseudo_start)
+        Mi_it[i]++;
+      while (Mi_it[i] != Mi_matches_end[i] && Mi_it[i]->chrom_id == jt->chrom_id && Mi_it[i]->start < jt_pseudo_end)
+        Mi_filtered_matches[i].push_back(*Mi_it[i]++);
+    }
+  }
+}
 
-    jt_pseudo_start = jt->start - M1->length / 2;
-    jt_pseudo_end = jt->end - M1->length / 2;
-    while (M1_it != M1_matches_end && M1_it->chrom_id < jt->chrom_id)
-      M1_it++;
-    while (M1_it != M1_matches_end && M1_it->chrom_id == jt->chrom_id && M1_it->start < jt_pseudo_start)
-      M1_it++;
-    while (M1_it != M1_matches_end && M1_it->chrom_id == jt->chrom_id && M1_it->start < jt_pseudo_end)
-      M1_filtered_matches.push_back(*M1_it++);
+void StatsSet::calculateStats(const vector<vector<PositionWeightMatrix::MotifMatch> > &Mi_matches)
+{
+  if ((int) Mi_matches.size() != arity)
+  {
+    cerr << "StatsSet: calculateStats: arity " << arity << ", but got Mi_matches length " << Mi_matches.size() << endl;
+    exit(1);
+  }
+
+  vector<vector<PositionWeightMatrix::MotifMatch>::const_iterator> jrt_head, jrt_tail;
+  vector<vector<PositionWeightMatrix::MotifMatch>::const_iterator> Mi_matches_end;
+  for (int i = 0; i < arity; i++)
+  {
+    jrt_head.push_back(Mi_matches[i].begin());
+    jrt_tail.push_back(Mi_matches[i].begin());
+    Mi_matches_end.push_back(Mi_matches[i].end());
+  }
+
+/* see the inequalities for dimer case below */
+
+  for (; jrt_head[0] != Mi_matches_end[0]; jrt_head[0]++)
+  {
+    for (int i = 1; i < arity; i++)
+    {
+      while (jrt_head[i] != Mi_matches_end[i] && jrt_head[i]->chrom_id < jrt_head[0]->chrom_id)
+        jrt_head[i]++;
+      while (jrt_head[i] != Mi_matches_end[i] && jrt_head[i]->chrom_id == jrt_head[0]->chrom_id && jrt_head[i]->start < jrt_head[0]->start + min_offset[i - 1])
+        jrt_head[i]++;
+
+      while (jrt_tail[i] != Mi_matches_end[i] && jrt_tail[i]->chrom_id < jrt_head[0]->chrom_id)
+        jrt_tail[i]++;
+      while (jrt_tail[i] != Mi_matches_end[i] && jrt_tail[i]->chrom_id == jrt_head[0]->chrom_id && jrt_tail[i]->start <= jrt_head[0]->start + max_offset[i - 1])
+        jrt_tail[i]++;
+    }
+
+    addHit(vector<int>(), vector<bool>(), 1, jrt_head, jrt_tail);
   }
 }
 
 void StatsSet::calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M0_matches, const vector<PositionWeightMatrix::MotifMatch> &M1_matches)
 {
+  PositionWeightMatrix *M0 = Mi[0];
+  PositionWeightMatrix *M1 = Mi[1];
+
   vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_head = M1_matches.begin();
   vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_tail = M1_matches.begin();
 
@@ -180,11 +383,25 @@ void StatsSet::calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M0
       else
         addHit(irt->start + M0->length - jrt->start - M1->length, jrt->strand != '+');
     }
+
+/*    vector<vector<PositionWeightMatrix::MotifMatch>::const_iterator> new_jrt_head;
+    new_jrt_head.push_back(irt);
+    new_jrt_head.push_back(jrt_head);
+    vector<vector<PositionWeightMatrix::MotifMatch>::const_iterator> new_jrt_tail;
+    new_jrt_tail.push_back(irt);
+    new_jrt_tail.push_back(jrt_tail);
+    addHit(vector<int>(), vector<bool>(), 1, new_jrt_head, new_jrt_tail);*/
   }
 }
 
 void StatsSet::returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_paired_matches, int offset, bool same_orientation) const
 {
+  //FIXME
+  PositionWeightMatrix *M0 = Mi[0];
+  PositionWeightMatrix *M1 = Mi[1];
+  vector<PositionWeightMatrix::MotifMatch> M0_filtered_matches = Mi_filtered_matches[0];
+  vector<PositionWeightMatrix::MotifMatch> M1_filtered_matches = Mi_filtered_matches[1];
+
   vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_head = M1_filtered_matches.begin();
   vector<PositionWeightMatrix::MotifMatch>::const_iterator jrt_tail = M1_filtered_matches.begin();
 
