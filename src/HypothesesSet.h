@@ -1,7 +1,7 @@
 /*
     HypothesesSet.h
 
-    Copyright (C) 2011-2013  Aleksander Jankowski <ajank@mimuw.edu.pl>
+    Copyright (C) 2011-2014  Aleksander Jankowski <ajank@mimuw.edu.pl>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 
 #include "PositionWeightMatrix.h"
 #include "Specification.h"
+class Stats;
 
 using namespace std;
 
@@ -46,7 +47,8 @@ class HypothesesSet
     struct Hypothesis
     {
       long int hypothesis_id, target_instances, target_N, control_instances, control_N;
-      double freq_ratio, prob, fold_change, overlap_inf_content, M0_inf_contribution, M1_inf_contribution;
+      double freq_ratio, prob, fold_change, max_overlap_inf_content, min_inf_contribution;
+      vector <double> overlap_inf_content, inf_contribution;
       double raw_log_p_value, removal_raw_log_p_value;
 
       typedef struct part
@@ -71,7 +73,7 @@ class HypothesesSet
         bool same_orientation;
       } similarity;
 
-      int dataset_id, pair_start, pair_end;
+      int dataset_id, pair_start, pair_end, pseudo_size;
       int clustering_status, cluster_id, cluster_offset;
       bool cluster_same_orientation;
 
@@ -88,8 +90,10 @@ class HypothesesSet
 
     const Specification &spec;
     HypothesesSet(const Specification &spec);
+    void processCombination(const vector<PositionWeightMatrix *> &Mi, const vector<bool> &orientations, const map<int, const NarrowPeak *> &target_datasets, /*const NarrowPeak *control_dataset*/ int dataset_id);
     void processPair(PositionWeightMatrix *M0, PositionWeightMatrix *M1, const map<int, const NarrowPeak *> &target_datasets, const NarrowPeak *control_dataset);
     void removeInsignificantHypotheses();
+    void expandDimers(const char *fname, const map<int, const NarrowPeak *> &target_datasets);
     long int getNumberOfHypotheses() const;
     long int getNumberOfAcceptedHypotheses() const;
     void clusterHypotheses();
@@ -115,6 +119,8 @@ class HypothesesSet
     long int num_hypotheses, hypotheses_size, hypotheses_previous_size;
     pthread_mutex_t mutex, remove_mutex;
     list<Hypothesis> hypotheses;
+    void processCombinationOfOrientation(Hypothesis &h, list<Hypothesis> &ohl, const NarrowPeak *target_dataset, const NarrowPeak *control_dataset, const Stats &s_target, const Stats &s_control, long int &sum_target_instances, long int &sum_target_N, long int &sum_control_instances, long int &sum_control_N, int level = 1);
+    void processTrimer(FILE *fout, const map<int, const NarrowPeak *> &target_datasets, int dataset_id, vector<Hypothesis::part> pred_parts, vector<Hypothesis::part> it_parts, int offset);
 
     int num_clusters;
     vector<Hypothesis *> clustered_hypotheses;

@@ -1,7 +1,7 @@
 /*
     HypothesesSet.cpp
 
-    Copyright (C) 2011-2013  Aleksander Jankowski <ajank@mimuw.edu.pl>
+    Copyright (C) 2011-2014  Aleksander Jankowski <ajank@mimuw.edu.pl>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -48,55 +48,63 @@ bool HypothesesSet::Hypothesis::ptr_compare(const Hypothesis *lhs, const Hypothe
 void HypothesesSet::Hypothesis::calculateStructure()
 {
   // at each of the overlapping positions, choose either M0 or M1 column to withdraw at this position
-  overlap_inf_content = 0.0; // minimal sum of IC of withdrawn motif matrix columns
-  M0_inf_contribution = 0.0;
-  M1_inf_contribution = 0.0;
-  pair_start = min(0, parts[1].offset); // FIXME rename pair_; loop ofer all parts
-  pair_end = max(parts[0].M->length, parts[1].M->length + parts[1].offset); // FIXME
+  int arity = parts.size();
+  overlap_inf_content = vector<double>(arity); // minimal sum of IC of withdrawn motif matrix columns
+  inf_contribution = vector<double>(arity);
+  vector<double> mass_center(arity);
 
-  double M0_mass_center = 0.0, M1_mass_center = 0.0;
-
-  for (int i = pair_start; i < pair_end; i++)
+  pair_start = pair_end = 0;
+  int pseudo_pair_start = parts[0].offset + parts[0].M->length / 2;
+  int pseudo_pair_end = parts[0].M->length + parts[0].offset - parts[0].M->length / 2;
+  for (vector<part>::iterator it = parts.begin(); it != parts.end(); it++)
   {
-    double M0_pIC = 0.0, M1_pIC = 0.0;
+    pair_start = min(pair_start, it->offset);
+    pseudo_pair_start = min(pseudo_pair_start, it->offset + it->M->length / 2);
+    pair_end = max(pair_end, it->M->length + it->offset);
+    pseudo_pair_end = max(pseudo_pair_end, it->M->length + it->offset - it->M->length / 2);
+  }
+  pseudo_size = pseudo_pair_end - pseudo_pair_start;
 
-    if (i >= 0 && i < parts[0].M->length)
-      M0_pIC = parts[0].M->position_inf_content[i];
+  for (int j = pair_start; j < pair_end; j++)
+  {
+    vector<double> pIC(arity);
 
-    if (i >= parts[1].offset && i < parts[1].M->length + parts[1].offset) // FIXME calculate vector pIC; order accordingly
-    {
-      if (parts[1].orientation)
-        M1_pIC = parts[1].M->position_inf_content[i - parts[1].offset];
+    for (int i = 0; i < arity; i++)
+      if (j >= parts[i].offset && j < parts[i].M->length + parts[i].offset)
+      {
+        if (parts[i].orientation)
+          pIC[i] = parts[i].M->position_inf_content[j - parts[i].offset];
+        else
+          pIC[i] = parts[i].M->position_inf_content[parts[i].M->length - 1 - j + parts[i].offset];
+      }
+
+    double max_pIC = *max_element(pIC.begin(), pIC.end());
+    int count_max = 0;
+
+    for (int i = 0; i < arity; i++)
+      if (pIC[i] < max_pIC)
+        overlap_inf_content[i] += pIC[i];
       else
-        M1_pIC = parts[1].M->position_inf_content[parts[1].M->length - 1 - i + parts[1].offset];
-    }
+        count_max++;
 
-    if (M0_pIC > M1_pIC)
-    {
-      M0_mass_center += i * M0_pIC;
-      M0_inf_contribution += M0_pIC;
-      overlap_inf_content += M1_pIC;
-    }
-    else if (M0_pIC < M1_pIC)
-    {
-      overlap_inf_content += M0_pIC;
-      M1_mass_center += i * M1_pIC;
-      M1_inf_contribution += M1_pIC;
-    }
-    else
-    {
-      M0_mass_center += i * M0_pIC / 2;
-      M0_inf_contribution += M0_pIC / 2;
-      overlap_inf_content += (M0_pIC + M1_pIC) / 2;
-      M1_mass_center += i * M1_pIC / 2;
-      M1_inf_contribution += M1_pIC / 2;
-    }
+    for (int i = 0; i < arity; i++)
+      if (pIC[i] == max_pIC)
+      {
+        overlap_inf_content[i] += max_pIC * (count_max - 1) / count_max;
+        inf_contribution[i] += max_pIC / count_max;
+        mass_center[i] += j * max_pIC / count_max;
+      }
   }
 
-  M0_mass_center /= M0_inf_contribution;
-  M1_mass_center /= M1_inf_contribution;
+  vector<double> oic(overlap_inf_content);
+  nth_element(oic.begin(), oic.begin() + 1, oic.end(), greater<double>());
+  max_overlap_inf_content = *max_element(overlap_inf_content.begin(), overlap_inf_content.end()) + oic[1];
+  min_inf_contribution = *min_element(inf_contribution.begin(), inf_contribution.end());
 
-  parts[0].goes_first = M0_mass_center <= M1_mass_center;
+  for (int i = 0; i < arity; i++)
+    mass_center[i] /= inf_contribution[i];
+
+  parts[0].goes_first = mass_center[0] <= mass_center[1];
 }
 
 void HypothesesSet::Hypothesis::calculateDimerMotif(const Genome &fa, double GC_content, int dimer_motif_margin)
@@ -192,6 +200,248 @@ HypothesesSet::HypothesesSet(const Specification &spec) : spec(spec)
   pthread_mutex_init(&remove_mutex, NULL);
 }
 
+void HypothesesSet::processCombinationOfOrientation(Hypothesis &h, list<Hypothesis> &ohl, const NarrowPeak *target_dataset, const NarrowPeak *control_dataset, const Stats &s_target, const Stats &s_control, long int &sum_target_instances, long int &sum_target_N, long int &sum_control_instances, long int &sum_control_N, int level)
+{
+  int arity = h.parts.size();
+  for (int offset = s_target.min_offset; offset <= s_target.max_offset; offset++)
+  {
+    h.parts[level].offset = offset;
+    if (level + 1 == arity)
+    {
+      h.calculateStructure();
+
+      h.target_instances = h.parts[level].orientation ? s_target.hits_same[offset] : s_target.hits_opposite[offset];
+      h.target_N = target_dataset->location_dist[h.pseudo_size];
+      h.control_instances = h.parts[level].orientation ? s_control.hits_same[offset] : s_control.hits_opposite[offset];
+      h.control_N = control_dataset->location_dist[h.pseudo_size];
+
+  /*          if (h.overlap_inf_content > spec.Options.MaxOverlappingInformationContent || h.inf_contribution[0] < spec.Options.MinMotifInformationContribution || h.inf_contribution[1] < spec.Options.MinMotifInformationContribution)
+        h.hypothesis_id = HYPOTHESIS_NOT_CONSIDERED; // disallowed motif complex structures
+      else
+      {
+        if ((M0 == M1) && h.parts[1].orientation & (h.parts[1].offset < 0))
+          h.hypothesis_id = HYPOTHESIS_NOT_CONSIDERED; // don't consider the redundant hypotheses in homodimer case
+        else*/
+          h.hypothesis_id = HYPOTHESIS_CONSIDERED;
+
+        sum_target_instances += h.target_instances;
+        sum_target_N += h.target_N;
+        sum_control_instances += h.control_instances;
+        sum_control_N += h.control_N;
+  /*          }*/
+
+      ohl.push_back(h);
+    }
+    else
+      processCombinationOfOrientation(h, ohl, target_dataset, control_dataset,
+        h.parts[level].orientation ? s_target.same[offset] : s_target.opposite[offset],
+        h.parts[level].orientation ? s_control.same[offset] : s_control.opposite[offset],
+        sum_target_instances, sum_target_N, sum_control_instances, sum_control_N, level + 1);
+  }
+}
+
+void HypothesesSet::processCombination(const vector<PositionWeightMatrix *> &Mi, const vector<bool> &orientations, const map<int, const NarrowPeak *> &target_datasets, /*const NarrowPeak *control_dataset*/ int dataset_id)
+{
+  int arity = Mi.size();
+  if (arity < 2)
+  {
+    cerr << "StatsSet: arity < 2" << endl;
+    exit(1);
+  }
+
+  vector<vector<vector<bool> > > orientation_sets;
+
+/*  vector<vector<bool> > orientations;
+  orientations.push_back(vector<bool>());
+  for (int i = 1; i < arity; i++)
+  {
+    vector<vector<bool> > extended_orientations;
+    for (vector<vector<bool> >::iterator it = orientations.begin(); it != orientations.end(); it++)
+    {
+      extended_orientations.push_back(*it);
+      extended_orientations.back().push_back(true);
+      extended_orientations.push_back(*it);
+      extended_orientations.back().push_back(false);
+    }
+    orientations.swap(extended_orientations);
+  }
+  if (spec.Options.ConsiderOrientationsSeparately)
+    for (vector<vector<bool> >::iterator it = orientations.begin(); it != orientations.end(); it++)
+    {
+      vector<vector<bool> > singleton;
+      singleton.push_back(*it);
+      orientation_sets.push_back(singleton);
+    }
+  else
+    orientation_sets.push_back(orientations);*/
+
+  vector<vector<bool> > singleton;
+  singleton.push_back(orientations);
+  orientation_sets.push_back(singleton);
+
+  Hypothesis h;
+
+  Hypothesis::part p;
+  p.M = Mi[0];
+  p.offset = 0;
+  p.goes_first = true;
+  p.orientation = true;
+  h.parts.push_back(p);
+
+  for (int i = 1; i < arity; i++)
+  {
+    p.M = Mi[i];
+    p.goes_first = false;
+    // p.offset and p.orientation will be set later
+    h.parts.push_back(p);
+  }
+
+  h.cluster_id = 0;
+  h.clustering_status = STATUS_UNRESOLVED;
+  h.similarity.distance = INFINITY;
+  h.raw_log_p_value = INFINITY;
+
+  // return early if the information content of any of the motifs is less than the minimal information contribution
+  if (Mi[0]->inf_content < spec.Options.MinMotifInformationContribution || Mi[1]->inf_content < spec.Options.MinMotifInformationContribution) return;
+
+/*  StatsSet ss_control(Mi, spec.Options.MaxMotifSpacing);
+  ss_control.addMotifMatchesFromRegions(control_dataset);
+  ss_control.calculateStats();*/
+
+  for (map<int, const NarrowPeak *>::const_iterator it = target_datasets.begin(); it != target_datasets.end(); it++)
+  {
+    if (dataset_id != it->first) continue;
+
+    h.dataset_id = it->first;
+    const NarrowPeak *target_dataset = it->second;
+    StatsSet ss_target(Mi, spec.Options.MaxMotifSpacing);
+    ss_target.addMotifMatchesFromRegions(target_dataset);
+    ss_target.calculateStats();
+
+    list<Hypothesis> hl; // gathers all the hypotheses for (M0, M1, dataset)
+    double min_raw_log_p_value = INFINITY;
+    list<Hypothesis>::iterator min_raw_log_p_value_hypothesis = hl.end();
+
+    for (vector<vector<vector<bool> > >::iterator orientations = orientation_sets.begin(); orientations != orientation_sets.end(); orientations++)
+    {
+    cerr << "ori" << endl;
+      list<Hypothesis> ohl; // gathers all the hypotheses for (M0, M1, dataset, orientations)
+      // if ConsiderOrientationsSeparately = True, orientations can be {same} or {opposite}
+      // otherwise, orientations are {same, opposite} and hl will eventually be the same as ohl
+      long int sum_target_instances = 0, sum_target_N = 0, sum_control_instances = 0, sum_control_N = 0;
+
+      for (vector<vector<bool> >::const_iterator jt = orientations->begin(); jt != orientations->end(); jt++)
+      {
+        for (int i = 1; i < arity; i++)
+          h.parts[i].orientation = (*jt)[i - 1];
+//        processCombinationOfOrientation(h, ohl, target_dataset, control_dataset, ss_target.stats, ss_control.stats, sum_target_instances, sum_target_N, sum_control_instances, sum_control_N);
+        processCombinationOfOrientation(h, ohl, target_dataset, target_dataset, ss_target.stats, ss_target.stats, sum_target_instances, sum_target_N, sum_control_instances, sum_control_N);
+      }
+
+      // calculate frequency ratio, i.e. f_{12} / b_{12}; it summarizes all the hypotheses in ohl
+      double freq_ratio = ((double) sum_target_instances / sum_target_N) / ((double) sum_control_instances / sum_control_N);
+cerr << ohl.size() << endl;
+
+      // now we have all the sums to calculate p-values
+      for (list<Hypothesis>::iterator jt = ohl.begin(); jt != ohl.end(); jt++)
+      {
+        jt->freq_ratio = freq_ratio;
+        jt->prob = ((double) jt->control_instances / jt->control_N) * jt->freq_ratio;
+        jt->fold_change = jt->target_instances / (jt->prob * jt->target_N);
+
+/*        // don't consider the hypothesis if the frequency ratio is smaller than a given threshold
+        // (default: FrequencyRatioThreshold = 1.0, i.e. exclude motif pairs which are less frequent in the foreground than in the background)
+        // or we have encountered a singularity (sum_target_N == 0, sum_control_instances == 0 or control_N == 0)
+        if (jt->freq_ratio < spec.Options.FrequencyRatioThreshold || !isfinite(jt->prob)) jt->hypothesis_id = HYPOTHESIS_NOT_CONSIDERED;*/
+        if (!isfinite(jt->prob)) jt->hypothesis_id = HYPOTHESIS_NOT_CONSIDERED;
+
+        if (jt->hypothesis_id == HYPOTHESIS_CONSIDERED)
+        {
+          // consider the hypothesis, increasing the hypotheses count
+          pthread_mutex_lock(&mutex);
+          jt->hypothesis_id = ++num_hypotheses;
+          pthread_mutex_unlock(&mutex);
+
+          // calculate raw p-value, i.e. P(target_instances >= X) where X ~ B(target_N, prob)
+// /*          jt->raw_log_p_value = pbinom(jt->target_instances - 1, jt->target_N, jt->prob, 0 /* lower.tail = F */, 1 /* log = T */);*/
+          jt->raw_log_p_value = -1000;
+
+          // save the raw p-value distribution for qq-plot
+          int addr = (int) (-get_log10_raw_p_value(*jt) / log10_raw_p_value_sampling);
+          pthread_mutex_lock(&mutex);
+          if ((int) log10_raw_p_value_dist.size() <= addr)
+            log10_raw_p_value_dist.resize(addr + 1, 0);
+          log10_raw_p_value_dist[addr]++;
+          pthread_mutex_unlock(&mutex);
+
+/*          // reject the hypothesis it if the motif complex is not frequent enough
+          if (jt->target_instances < spec.Options.TargetInstancesThreshold || jt->fold_change < spec.Options.FoldChangeThreshold)
+            jt->clustering_status = STATUS_REJECTED;
+          else*/ if (jt->raw_log_p_value < min_raw_log_p_value)
+          {
+            min_raw_log_p_value = jt->raw_log_p_value;
+            min_raw_log_p_value_hypothesis = jt;
+          }
+        }
+        else // mark not considered hypotheses as rejected
+          jt->clustering_status = STATUS_REJECTED;
+      }
+
+      hl.splice(hl.end(), ohl);
+    }
+
+    // if all the raw log p-values are equal to INFINITY, choose the removal_hypothesis arbitrarily
+    if (min_raw_log_p_value_hypothesis == hl.end())
+      min_raw_log_p_value_hypothesis = hl.begin();
+
+    pthread_mutex_lock(&mutex);
+    if (is_p_value_significant(min_raw_log_p_value))
+    {
+      pthread_mutex_unlock(&mutex);
+      int size = 0;
+
+      for (list<Hypothesis>::iterator jt = hl.begin(); jt != hl.end(); jt++)
+      {
+        size++;
+        // group together the hypotheses for given (M0, M1, dataset)
+        jt->removal_raw_log_p_value = min_raw_log_p_value;
+        jt->removal_hypothesis = &*min_raw_log_p_value_hypothesis;
+
+        if (spec.Options.ConsiderMostSignificantComplexOnly && jt != min_raw_log_p_value_hypothesis)
+          jt->clustering_status = STATUS_REJECTED;
+
+        if (!is_p_value_significant(jt->raw_log_p_value))
+          jt->clustering_status = STATUS_REJECTED;
+
+/*        // and for the ones that look significant for now, save their genomic instances
+        if (jt->clustering_status != STATUS_REJECTED)
+        {
+          ss_target.returnPairedMatches(jt->M0_paired_matches, jt->parts[1].offset, jt->parts[1].orientation);
+          assert((long int) jt->M0_paired_matches.size() == jt->target_instances);
+
+          int spacing_sign = jt->parts[0].goes_first ? 1 : -1;
+          for (int spacing_deviation = 1; spacing_deviation <= spec.Options.GenomicLocationsMaxSpacingDeviation; spacing_deviation++)
+            ss_target.returnPairedMatches(jt->M0_spaced_matches[spacing_deviation], jt->parts[1].offset + spacing_sign * spacing_deviation, jt->parts[1].orientation);
+        }*/
+      }
+
+      pthread_mutex_lock(&mutex);
+      hypotheses.splice(hypotheses.end(), hl);
+      hypotheses_size += size;
+    }
+    pthread_mutex_unlock(&mutex);
+  }
+
+  pthread_mutex_lock(&mutex);
+  if (hypotheses_size > 2 * hypotheses_previous_size)
+  {
+    pthread_mutex_unlock(&mutex);
+    removeInsignificantHypotheses();
+  }
+  else
+    pthread_mutex_unlock(&mutex);
+}
+
 void HypothesesSet::processPair(PositionWeightMatrix *M0, PositionWeightMatrix *M1, const map<int, const NarrowPeak *> &target_datasets, const NarrowPeak *control_dataset)
 {
   vector<vector<bool> > orientation_sets;
@@ -267,7 +517,7 @@ void HypothesesSet::processPair(PositionWeightMatrix *M0, PositionWeightMatrix *
           h.control_N = control_dataset->location_dist[size];
           h.calculateStructure();
 
-          if (h.overlap_inf_content > spec.Options.MaxOverlappingInformationContent || h.M0_inf_contribution < spec.Options.MinMotifInformationContribution || h.M1_inf_contribution < spec.Options.MinMotifInformationContribution)
+          if (h.max_overlap_inf_content > spec.Options.MaxOverlappingInformationContent || h.min_inf_contribution < spec.Options.MinMotifInformationContribution)
             h.hypothesis_id = HYPOTHESIS_NOT_CONSIDERED; // disallowed motif complex structures
           else
           {
@@ -415,6 +665,104 @@ void HypothesesSet::removeInsignificantHypotheses()
   pthread_mutex_unlock(&remove_mutex);
 }
 
+void HypothesesSet::processTrimer(FILE *fout, const map<int, const NarrowPeak *> &target_datasets, int dataset_id, vector<Hypothesis::part> pred_parts, vector<Hypothesis::part> it_parts, int offset)
+{
+  it_parts[0].offset += offset;
+  it_parts[1].offset += offset;
+
+  int match = -1;
+  for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 2; j++)
+      if (pred_parts[i].M == it_parts[j].M && pred_parts[i].offset == it_parts[j].offset && pred_parts[i].orientation == it_parts[j].orientation)
+      {
+        if (match != -1) cerr << "error " << match << i << j << endl;
+        match = j;
+      }
+
+  if (match == 0)
+    pred_parts.push_back(it_parts[1]);
+  else if (match == 1)
+    pred_parts.push_back(it_parts[0]);
+  else
+    cerr << "error, no match " << match << endl;
+
+  Hypothesis h02;
+  h02.parts.push_back(pred_parts[0]);
+  h02.parts.push_back(pred_parts[2]);
+  h02.calculateStructure();
+  if (h02.max_overlap_inf_content > spec.Options.MaxOverlappingInformationContent || h02.min_inf_contribution < spec.Options.MinMotifInformationContribution) return;
+
+  Hypothesis h12;
+  h12.parts.push_back(pred_parts[1]);
+  h12.parts.push_back(pred_parts[2]);
+  h12.calculateStructure();
+  if (h12.max_overlap_inf_content > spec.Options.MaxOverlappingInformationContent || h12.min_inf_contribution < spec.Options.MinMotifInformationContribution) return;
+
+  vector<PositionWeightMatrix *> Mi;
+  Mi.push_back(pred_parts[0].M);
+  Mi.push_back(pred_parts[1].M);
+  Mi.push_back(pred_parts[2].M);
+  vector<bool> orientations;
+  assert(pred_parts[0].orientation); // do not add to orientation
+  orientations.push_back(pred_parts[1].orientation);
+  orientations.push_back(pred_parts[2].orientation);
+  cerr << "processCombination" << endl;
+  processCombination(Mi, orientations, target_datasets, dataset_id);
+
+  fprintf(fout, "%s\t%s\t%d\t%s\t%s\t%d\t%s\t%s\t%d\t%s\n", Genome::dataset_names[dataset_id].c_str(),
+    pred_parts[0].M->accession.c_str(), pred_parts[0].offset, (pred_parts[0].orientation ? "same" : "opposite"),
+    pred_parts[1].M->accession.c_str(), pred_parts[1].offset, (pred_parts[1].orientation ? "same" : "opposite"),
+    pred_parts[2].M->accession.c_str(), pred_parts[2].offset, (pred_parts[2].orientation ? "same" : "opposite"));
+}
+
+void HypothesesSet::expandDimers(const char *fname, const map<int, const NarrowPeak *> &target_datasets)
+{
+  cout << "Writing trimer file: " << fname << endl;
+  FILE *fout;
+
+  if ((fout = fopen(fname, "w")) == NULL)
+  {
+    cerr << "Could not open output file \"" << fname << "\"" << endl;
+    exit(1);
+  }
+
+  fprintf(fout, "dataset\tM0_acc\tM0_offset\tM0_orientation\tM1_acc\tM1_offset\tM1_orientation\tM2_acc\tM2_offset\tM2_orientation\n");
+
+  for (list<HypothesesSet::Hypothesis>::iterator it_ptr = hypotheses.begin(); it_ptr != hypotheses.end(); it_ptr++)
+  {
+    Hypothesis *it = &*it_ptr;
+    if (it->clustering_status == STATUS_REJECTED) continue;
+    if (it->parts.size() > 2) continue;
+
+    vector<Hypothesis::part> it_rc_parts;
+    it_rc_parts.push_back(it->parts[0]);
+    it_rc_parts.push_back(it->parts[1]);
+    it_rc_parts[0].orientation = !it->parts[0].orientation;
+    it_rc_parts[1].orientation = !it->parts[1].orientation;
+    it_rc_parts[1].offset = it->parts[0].M->length - it->parts[1].offset - it->parts[1].M->length;
+
+    // try to join the overrepresented motif complex to any of the previous clusters
+    for (list<Hypothesis>::iterator pred_ptr = hypotheses.begin(); pred_ptr != it_ptr; pred_ptr++)
+    {
+      Hypothesis *pred = &*pred_ptr;
+      if (pred->clustering_status == STATUS_REJECTED) continue;
+      if (pred->dataset_id != it->dataset_id) continue;
+
+      for (int i = 0; i < 2; i++)
+        for (int j = 0; j < 2; j++)
+          if (pred->parts[i].M == it->parts[j].M)
+          {
+            if (pred->parts[i].orientation == it->parts[j].orientation)
+              processTrimer(fout, target_datasets, pred->dataset_id, pred->parts, it->parts, pred->parts[i].offset - it->parts[j].offset);
+            else
+              processTrimer(fout, target_datasets, pred->dataset_id, pred->parts, it_rc_parts, pred->parts[i].offset - it_rc_parts[j].offset);
+          }
+    }
+  }
+
+  fclose(fout);
+}
+
 long int HypothesesSet::getNumberOfAcceptedHypotheses() const
 {
   long int count = 0;
@@ -542,18 +890,52 @@ void HypothesesSet::writeDetailedStatsFile(const char *fname) const
     exit(1);
   }
 
-  fprintf(fout, "hypothesis_id\tM0_acc\tM1_acc\tdataset\toffset\torientation\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM0_inf_content\tM1_inf_content\toverlap_inf_content\tM0_inf_contribution\tM1_inf_contribution\tlog10_raw_p_value\tlog10_p_value\n");
+  int arity = 0;
+  for (list<Hypothesis>::const_iterator it = hypotheses.begin(); it != hypotheses.end(); it++)
+    arity = max(arity, (int) it->parts.size());
+
+  fprintf(fout, "hypothesis_id\tM0_acc");
+  for (int i = 1; i < arity; i++)
+    fprintf(fout, "\tM%d_acc\tM%d_offset\tM%d_orientation", i, i, i);
+  fprintf(fout, "\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change");
+  for (int i = 0; i < arity; i++)
+    fprintf(fout, "\tM%d_inf_content", i);
+  for (int i = 0; i < arity; i++)
+    fprintf(fout, "\tM%d_overlap_inf_content", i);
+  for (int i = 0; i < arity; i++)
+    fprintf(fout, "\tM%d_inf_contribution", i);
+  fprintf(fout, "\tlog10_raw_p_value\tlog10_p_value\n");
 
   for (list<Hypothesis>::const_iterator it = hypotheses.begin(); it != hypotheses.end(); it++)
   {
     if (spec.Options.OutputDetailedStats == OUTPUT_RANGE_SIGNATURE && it->removal_hypothesis->clustering_status != STATUS_CLUSTER_SEED && it->removal_hypothesis->clustering_status != STATUS_JOINED_BY_IDENTITY) continue;
 
-    fprintf(fout, "%ld\t%s\t%s\t%d\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-      it->hypothesis_id, it->parts[0].M->accession.c_str(), it->parts[1].M->accession.c_str(), it->parts[1].offset, (it->parts[1].orientation ? "same" : "opposite"),
-      Genome::dataset_names[it->dataset_id].c_str(),
-      it->target_instances, it->target_N, it->control_instances, it->control_N, it->freq_ratio, log(it->prob) / log(10), it->fold_change,
-      it->parts[0].M->inf_content, it->parts[1].M->inf_content, it->overlap_inf_content, it->M0_inf_contribution, it->M1_inf_contribution,
-      get_log10_raw_p_value(*it), get_log10_p_value(*it));
+    fprintf(fout, "%ld\t%s", it->hypothesis_id, it->parts[0].M->accession.c_str());
+
+    for (int i = 1; i < (int) it->parts.size(); i++)
+      fprintf(fout, "\t%s\t%d\t%s", it->parts[i].M->accession.c_str(), it->parts[i].offset, (it->parts[i].orientation ? "same" : "opposite"));
+    for (int i = it->parts.size(); i < arity; i++)
+      fprintf(fout, "\t\t\t");
+
+    fprintf(fout, "\t%s\t%ld\t%ld\t%ld\t%ld\t%f\t%f\t%f", Genome::dataset_names[it->dataset_id].c_str(),
+      it->target_instances, it->target_N, it->control_instances, it->control_N, it->freq_ratio, log(it->prob) / log(10), it->fold_change);
+
+    for (int i = 0; i < (int) it->parts.size(); i++)
+      fprintf(fout, "\t%f", it->parts[i].M->inf_content);
+    for (int i = it->parts.size(); i < arity; i++)
+      fprintf(fout, "\t");
+
+    for (int i = 0; i < (int) it->parts.size(); i++)
+      fprintf(fout, "\t%f", it->overlap_inf_content[i]);
+    for (int i = it->parts.size(); i < arity; i++)
+      fprintf(fout, "\t");
+
+    for (int i = 0; i < (int) it->parts.size(); i++)
+      fprintf(fout, "\t%f", it->inf_contribution[i]);
+    for (int i = it->parts.size(); i < arity; i++)
+      fprintf(fout, "\t");
+
+    fprintf(fout, "\t%f\t%f\n", get_log10_raw_p_value(*it), get_log10_p_value(*it));
   }
 
   fclose(fout);
@@ -630,11 +1012,13 @@ void HypothesesSet::writeClusteringResultsFile(const char *fname) const
     exit(1);
   }
 
-  fprintf(fout, "cluster_id\thypothesis_id\tM0_acc\tM0_name\tM0_orientation\toffset\tM1_acc\tM1_name\tM1_orientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM0_inf_content\tM1_inf_content\toverlap_inf_content\tM0_inf_contribution\tM1_inf_contribution\tlog10_raw_p_value\tlog10_p_value\tcluster_offset\tsimilarity_annotation\n");
+  fprintf(fout, "cluster_id\thypothesis_id\tM0_acc\tM0_name\tM0_orientation\toffset\tM1_acc\tM1_name\tM1_orientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM0_inf_content\tM1_inf_content\tmax_overlap_inf_content\tinf_contribution[0]\tinf_contribution[1]\tlog10_raw_p_value\tlog10_p_value\tcluster_offset\tsimilarity_annotation\n");
 
   for (vector<Hypothesis *>::const_iterator it_ptr = clustered_hypotheses.begin(); it_ptr != clustered_hypotheses.end(); it_ptr++)
   {
     Hypothesis *it = *it_ptr;
+    cerr << "debug hyp" << endl;
+    cerr << "..." << it->hypothesis_id << " " << it->parts.size() << endl;
 
     if (it->clustering_status == STATUS_REJECTED) continue;
 
@@ -673,9 +1057,9 @@ void HypothesesSet::writeClusteringResultsFile(const char *fname) const
       it->target_instances, it->target_N, it->control_instances, it->control_N, it->freq_ratio, log(it->prob) / log(10), it->fold_change,
       M0_goes_first ? it->parts[0].M->inf_content : it->parts[1].M->inf_content,
       M0_goes_first ? it->parts[1].M->inf_content : it->parts[0].M->inf_content,
-      it->overlap_inf_content,
-      M0_goes_first ? it->M0_inf_contribution : it->M1_inf_contribution,
-      M0_goes_first ? it->M1_inf_contribution : it->M0_inf_contribution,
+      it->max_overlap_inf_content,
+      M0_goes_first ? it->inf_contribution[0] : it->inf_contribution[1],
+      M0_goes_first ? it->inf_contribution[1] : it->inf_contribution[0],
       get_log10_raw_p_value(*it), get_log10_p_value(*it), it->cluster_offset);
 
     if (it->similarity.distance < spec.Options.ClusteringDistanceConstant + it->dimer.inf_content * spec.Options.ClusteringDistanceMultiplier)

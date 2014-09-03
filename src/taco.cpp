@@ -2,7 +2,7 @@
     TACO -- Transcription factor Association from Complex Overrepresentation
     (formely: Transcription factor Association from Chromatin Openness)
 
-    Copyright (C) 2011-2013  Aleksander Jankowski <ajank@mimuw.edu.pl>
+    Copyright (C) 2011-2014  Aleksander Jankowski <ajank@mimuw.edu.pl>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@
 using namespace std;
 
 const string lead = "TACO -- Transcription factor Association from Complex Overrepresentation";
-const string version = "Version 1.0 (git-devel)"; // 1.0 was dated 2013-10-08
+const string version = "Version 2.0 (git-devel)"; // 2.0 was dated 2014-09-01
 
 Genome fa;
 double GC_content;
@@ -400,23 +400,6 @@ int main(int argc, char *argv[])
   cout << endl << "Predicting cell-type-specific overrepresented motif complexes..." << endl;
   for (vector<Specification::ScopeSection>::iterator it = spec.Scope.begin(); it != spec.Scope.end(); it++)
   {
-    // insert all combinations of (M0, M1) into the parameter queue
-    for (vector<PositionWeightMatrix>::iterator jt = motifs.begin(); jt != motifs.end(); jt++)
-      for (vector<PositionWeightMatrix>::iterator kt = jt; kt != motifs.end(); kt++)
-      {
-        bool jt_scope1 = it->Motif1.empty() || it->Motif1.find(jt->accession) != it->Motif1.end();
-        bool kt_scope2 = it->Motif2.empty() || it->Motif2.find(kt->accession) != it->Motif2.end();
-        if (jt_scope1 && kt_scope2)
-        {
-          motif_pair_scope.push(make_pair(&*jt, &*kt));
-          continue;
-        }
-
-        bool kt_scope1 = it->Motif1.empty() || it->Motif1.find(kt->accession) != it->Motif1.end();
-        bool jt_scope2 = it->Motif2.empty() || it->Motif2.find(jt->accession) != it->Motif2.end();
-        if (kt_scope1 && jt_scope2)
-          motif_pair_scope.push(make_pair(&*kt, &*jt));
-      }
 
     // set the scope of datasets considered
     target_datasets_scope.clear();
@@ -424,44 +407,104 @@ int main(int argc, char *argv[])
       if (it->Dataset.empty() || it->Dataset.find(Genome::dataset_names[jt->first]) != it->Dataset.end())
         target_datasets_scope[jt->first] = &jt->second;
 
+    if (string(argv[1]) != "trimers_UwDnase.spec")
+    {
+      // insert all combinations of (M0, M1) into the parameter queue
+      for (vector<PositionWeightMatrix>::iterator jt = motifs.begin(); jt != motifs.end(); jt++)
+        for (vector<PositionWeightMatrix>::iterator kt = jt; kt != motifs.end(); kt++)
+        {
+          bool jt_scope1 = it->Motif1.empty() || it->Motif1.find(jt->accession) != it->Motif1.end();
+          bool kt_scope2 = it->Motif2.empty() || it->Motif2.find(kt->accession) != it->Motif2.end();
+          if (jt_scope1 && kt_scope2)
+          {
+            motif_pair_scope.push(make_pair(&*jt, &*kt));
+            continue;
+          }
+
+          bool kt_scope1 = it->Motif1.empty() || it->Motif1.find(kt->accession) != it->Motif1.end();
+          bool jt_scope2 = it->Motif2.empty() || it->Motif2.find(jt->accession) != it->Motif2.end();
+          if (kt_scope1 && jt_scope2)
+            motif_pair_scope.push(make_pair(&*kt, &*jt));
+        }
+    }
+    else
+    {
+/*      { vector<PositionWeightMatrix *> Mi;
+      Mi.push_back(&(motifs[6])); Mi.push_back(&(motifs[6])); Mi.push_back(&(motifs[9]));
+      hs.processCombination(Mi, target_datasets_scope, &control_dataset); }
+
+      { vector<PositionWeightMatrix *> Mi;
+      Mi.push_back(&(motifs[6])); Mi.push_back(&(motifs[6])); Mi.push_back(&(motifs[8]));
+      hs.processCombination(Mi, target_datasets_scope, &control_dataset); }
+
+      { vector<PositionWeightMatrix *> Mi;
+      Mi.push_back(&(motifs[8])); Mi.push_back(&(motifs[3])); Mi.push_back(&(motifs[7]));
+      hs.processCombination(Mi, target_datasets_scope, &control_dataset); }
+
+      { vector<PositionWeightMatrix *> Mi;
+      Mi.push_back(&(motifs[4])); Mi.push_back(&(motifs[4])); Mi.push_back(&(motifs[7]));
+      hs.processCombination(Mi, target_datasets_scope, &control_dataset); }
+
+      { vector<PositionWeightMatrix *> Mi;
+      Mi.push_back(&(motifs[8])); Mi.push_back(&(motifs[8])); Mi.push_back(&(motifs[7]));
+      hs.processCombination(Mi, target_datasets_scope, &control_dataset); }
+
+      { vector<PositionWeightMatrix *> Mi;
+      Mi.push_back(&(motifs[4])); Mi.push_back(&(motifs[8])); Mi.push_back(&(motifs[8]));
+      hs.processCombination(Mi, target_datasets_scope, &control_dataset); }
+
+      { vector<PositionWeightMatrix *> Mi;
+      Mi.push_back(&(motifs[4])); Mi.push_back(&(motifs[2])); Mi.push_back(&(motifs[7]));
+      hs.processCombination(Mi, target_datasets_scope, &control_dataset); }
+
+      { vector<PositionWeightMatrix *> Mi;
+      Mi.push_back(&(motifs[4])); Mi.push_back(&(motifs[8])); Mi.push_back(&(motifs[2]));
+      hs.processCombination(Mi, target_datasets_scope, &control_dataset); }*/
+    }
+
     // main experiment processing: consider all the combinations of (M0, M1, dataset)
     for (int i = 0; i < spec.Options.NumberOfThreads; i++)
       pthread_create(&pth[i], NULL, experimentThread, &hs);
     for (int i = 0; i < spec.Options.NumberOfThreads; i++)
       pthread_join(pth[i], NULL);
-  }
 
-  cout << "Number of hypotheses considered: " << hs.getNumberOfHypotheses() << endl;
-  // remove insignificant hypotheses, then save the predictions and their genomic locations
-  hs.removeInsignificantHypotheses();
-  cout << "Number of accepted hypotheses: " << hs.getNumberOfAcceptedHypotheses() << endl;
-
-  if (spec.Options.ClusteringDistanceConstant > 0.0 || spec.Options.ClusteringDistanceMultiplier > 0.0 || spec.Options.AnnotateDimerMotifSimilarity)
-  {
-    // before clustering, calculate the dimer motifs and possibly find similar individual motifs
-    hypotheses_it = hs.hypotheses_begin();
-
-    if (spec.Options.AnnotateDimerMotifSimilarity)
+    if (string(argv[1]) != "trimers_UwDnase.spec")
     {
-      cout << endl << "Calculating dimer motifs and annotating their similarity to individual motifs..." << endl;
-      for (int i = 0; i < spec.Options.NumberOfThreads; i++)
-        pthread_create(&pth[i], NULL, postprocessThreadDimerMotifSimilarity, &hs);
-    }
-    else
-    {
-      cout << endl << "Calculating dimer motifs..." << endl;
-      for (int i = 0; i < spec.Options.NumberOfThreads; i++)
-        pthread_create(&pth[i], NULL, postprocessThreadDimerMotif, &hs);
-    }
+      cout << "Number of hypotheses considered: " << hs.getNumberOfHypotheses() << endl;
+      // remove insignificant hypotheses, then save the predictions and their genomic locations
+      hs.removeInsignificantHypotheses();
+      cout << "Number of accepted hypotheses: " << hs.getNumberOfAcceptedHypotheses() << endl;
 
-    for (int i = 0; i < spec.Options.NumberOfThreads; i++)
-      pthread_join(pth[i], NULL);
+      if (spec.Options.ClusteringDistanceConstant > 0.0 || spec.Options.ClusteringDistanceMultiplier > 0.0 || spec.Options.AnnotateDimerMotifSimilarity)
+      {
+        // before clustering, calculate the dimer motifs and possibly find similar individual motifs
+        hypotheses_it = hs.hypotheses_begin();
+
+        if (spec.Options.AnnotateDimerMotifSimilarity)
+        {
+          cout << endl << "Calculating dimer motifs and annotating their similarity to individual motifs..." << endl;
+          for (int i = 0; i < spec.Options.NumberOfThreads; i++)
+            pthread_create(&pth[i], NULL, postprocessThreadDimerMotifSimilarity, &hs);
+        }
+        else
+        {
+          cout << endl << "Calculating dimer motifs..." << endl;
+          for (int i = 0; i < spec.Options.NumberOfThreads; i++)
+            pthread_create(&pth[i], NULL, postprocessThreadDimerMotif, &hs);
+        }
+
+        for (int i = 0; i < spec.Options.NumberOfThreads; i++)
+          pthread_join(pth[i], NULL);
+      }
+
+      cout << endl << "Clustering the overrepresented motif complexes..." << endl;
+      // cluster the hypotheses, then save the clustering results and dimer motifs
+      hs.clusterHypotheses();
+      cout << "Number of distinct predictions: " << hs.getNumberOfClusters() << endl;
+      snprintf(fname, 1024, "%s.trimers", spec.OutputPrefix.c_str());
+      hs.expandDimers(fname, target_datasets_scope);
+    }
   }
-
-  cout << endl << "Clustering the overrepresented motif complexes..." << endl;
-  // cluster the hypotheses, then save the clustering results and dimer motifs
-  hs.clusterHypotheses();
-  cout << "Number of distinct predictions: " << hs.getNumberOfClusters() << endl;
 
   cout << endl << "Writing output files..." << endl;
   snprintf(fname, 1024, "%s.tab", spec.OutputPrefix.c_str());

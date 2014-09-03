@@ -1,7 +1,7 @@
 /*
     StatsSet.h
 
-    Copyright (C) 2011-2013  Aleksander Jankowski <ajank@mimuw.edu.pl>
+    Copyright (C) 2011-2014  Aleksander Jankowski <ajank@mimuw.edu.pl>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -62,6 +62,7 @@ class StatsSet
     void addHit(const vector<int> &offset, const vector<bool> &same_orientation);
     void addHit(vector<int> offset, vector<bool> same_orientation, int level, const vector<vector<PositionWeightMatrix::MotifMatch>::const_iterator> &jrt_head, const vector<vector<PositionWeightMatrix::MotifMatch>::const_iterator> &jrt_tail);
     void addHit(int offset, bool same_orientation);
+    long int getStats(const vector<int> &offset, const vector<bool> &same_orientation) const;
     long int getStats(int offset, bool same_orientation) const;
     long int getMaximumStats(int *returned_offset, bool *returned_same_orientation) const;
     void calculateStats(const vector<vector<PositionWeightMatrix::MotifMatch> > &Mi_matches);

@@ -1,7 +1,7 @@
 /*
     StatsSet.cpp
 
-    Copyright (C) 2011-2013  Aleksander Jankowski <ajank@mimuw.edu.pl>
+    Copyright (C) 2011-2014  Aleksander Jankowski <ajank@mimuw.edu.pl>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -52,11 +52,11 @@ StatsSet::StatsSet(const vector<PositionWeightMatrix *> Mi, int margin)
   min_offset.resize(arity - 1);
   max_offset.resize(arity - 1);
   initialize_stats(stats, 1, 0, Mi[0]->length, margin);
-  for (int level = 1; level < arity; level++)
+/*  for (int level = 1; level < arity; level++)
   {
     int i = level - 1;
     cerr << "min_offset " << min_offset[i] << " max_offset " << max_offset[i] << endl;
-  }
+  }*/
 }
 
 StatsSet::StatsSet(PositionWeightMatrix *M0, PositionWeightMatrix *M1, int margin)
@@ -236,6 +236,52 @@ void StatsSet::addHit(int offset, bool same_orientation)
   }
 }
 
+long int StatsSet::getStats(const vector<int> &offset, const vector<bool> &same_orientation) const
+{
+  if ((int) offset.size() + 1 != arity)
+  {
+    cerr << "StatsSet: addHit: arity " << arity << ", but got offset length " << offset.size() << endl;
+    exit(1);
+  }
+
+  if ((int) same_orientation.size() + 1 != arity)
+  {
+    cerr << "StatsSet: addHit: arity " << arity << ", but got same_orientation length " << same_orientation.size() << endl;
+    exit(1);
+  }
+
+  Stats s = stats;
+  for (int level = 1; level < arity; level++)
+  {
+    int i = level - 1;
+    if (s.min_offset <= offset[i] && offset[i] <= s.max_offset)
+    {
+      if (level + 1 == arity)
+      {
+        if (same_orientation[i])
+          return s.hits_same[offset[i]];
+        else
+          return s.hits_opposite[offset[i]];
+      }
+      else
+      {
+        if (same_orientation[i])
+          s = s.same[offset[i]];
+        else
+          s = s.opposite[offset[i]];
+      }
+    }
+    else
+    {
+      cerr << "StatsSet: offset[" << i << "] " << offset[i] << " beyond range [" << s.min_offset << ", " << s.max_offset << "]" << endl;
+      exit(1);
+    }
+  }
+
+  cerr << "StatsSet: control reaches end, arity " << arity << endl;
+  exit(1);
+}
+
 long int StatsSet::getStats(int offset, bool same_orientation) const
 {
   if (stats.min_offset <= offset && offset <= stats.max_offset)
@@ -396,7 +442,6 @@ void StatsSet::calculateStats(const vector<PositionWeightMatrix::MotifMatch> &M0
 
 void StatsSet::returnPairedMatches(vector<PositionWeightMatrix::MotifMatch> &M0_paired_matches, int offset, bool same_orientation) const
 {
-  //FIXME
   PositionWeightMatrix *M0 = Mi[0];
   PositionWeightMatrix *M1 = Mi[1];
   vector<PositionWeightMatrix::MotifMatch> M0_filtered_matches = Mi_filtered_matches[0];
