@@ -534,7 +534,7 @@ void HypothesesSet::writeDetailedStatsFile(const char *fname) const
     exit(1);
   }
 
-  fprintf(fout, "hypothesis_id\tM1_acc\tM2_acc\tdataset\toffset\torientation\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\n");
+  fprintf(fout, "hypothesis_id\tM1_acc\tM2_acc\toffset\torientation\tdataset\ttarget_instances\ttarget_N\tcontrol_instances\tcontrol_N\tfreq_ratio\tlog10_prob\tfold_change\tM1_inf_content\tM2_inf_content\toverlap_inf_content\tM1_inf_contribution\tM2_inf_contribution\tlog10_raw_p_value\tlog10_p_value\n");
 
   for (list<Hypothesis>::const_iterator it = hypotheses.begin(); it != hypotheses.end(); it++)
   {
