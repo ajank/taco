@@ -188,7 +188,7 @@ HypothesesSet::HypothesesSet(const Specification &spec) : spec(spec)
   hypotheses_previous_size = 0;
   max_log_p_value = log(spec.Options.PValueThreshold);
   num_clusters = 0;
-  pthread_mutex_init(&mutex, NULL);
+  pthread_mutex_init(&data_mutex, NULL);
   pthread_mutex_init(&remove_mutex, NULL);
 }
 
@@ -296,20 +296,20 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
         if (jt->hypothesis_id == HYPOTHESIS_CONSIDERED)
         {
           // consider the hypothesis, increasing the hypotheses count
-          pthread_mutex_lock(&mutex);
+          pthread_mutex_lock(&data_mutex);
           jt->hypothesis_id = ++num_hypotheses;
-          pthread_mutex_unlock(&mutex);
+          pthread_mutex_unlock(&data_mutex);
 
           // calculate raw p-value, i.e. P(target_instances >= X) where X ~ B(target_N, prob)
           jt->raw_log_p_value = pbinom(jt->target_instances - 1, jt->target_N, jt->prob, 0 /* lower.tail = F */, 1 /* log = T */);
 
           // save the raw p-value distribution for qq-plot
           int addr = (int) (-get_log10_raw_p_value(*jt) / log10_raw_p_value_sampling);
-          pthread_mutex_lock(&mutex);
+          pthread_mutex_lock(&data_mutex);
           if ((int) log10_raw_p_value_dist.size() <= addr)
             log10_raw_p_value_dist.resize(addr + 1, 0);
           log10_raw_p_value_dist[addr]++;
-          pthread_mutex_unlock(&mutex);
+          pthread_mutex_unlock(&data_mutex);
 
           // reject the hypothesis it if the motif complex is not frequent enough
           if (jt->target_instances < spec.Options.TargetInstancesThreshold || jt->fold_change < spec.Options.FoldChangeThreshold)
@@ -331,10 +331,10 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
     if (min_raw_log_p_value_hypothesis == hl.end())
       min_raw_log_p_value_hypothesis = hl.begin();
 
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&data_mutex);
     if (is_p_value_significant(min_raw_log_p_value))
     {
-      pthread_mutex_unlock(&mutex);
+      pthread_mutex_unlock(&data_mutex);
       int size = 0;
 
       for (list<Hypothesis>::iterator jt = hl.begin(); jt != hl.end(); jt++)
@@ -362,28 +362,28 @@ void HypothesesSet::processPair(PositionWeightMatrix *M1, PositionWeightMatrix *
         }
       }
 
-      pthread_mutex_lock(&mutex);
+      pthread_mutex_lock(&data_mutex);
       hypotheses.splice(hypotheses.end(), hl);
       hypotheses_size += size;
     }
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&data_mutex);
   }
 
-  pthread_mutex_lock(&mutex);
+  pthread_mutex_lock(&data_mutex);
   if (hypotheses_size > 2 * hypotheses_previous_size)
   {
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&data_mutex);
     removeInsignificantHypotheses();
   }
   else
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&data_mutex);
 }
 
 void HypothesesSet::removeInsignificantHypotheses()
 {
   // recalculate p-values and remove insignificant hypotheses
   if (pthread_mutex_trylock(&remove_mutex) == EBUSY) return; // resign if another thread is doing it
-  pthread_mutex_lock(&mutex);
+  pthread_mutex_lock(&data_mutex);
 
   for (list<Hypothesis>::iterator it = hypotheses.begin(); it != hypotheses.end(); /*it++*/)
   {
@@ -403,7 +403,7 @@ void HypothesesSet::removeInsignificantHypotheses()
   }
 
   hypotheses_previous_size = hypotheses_size;
-  pthread_mutex_unlock(&mutex);
+  pthread_mutex_unlock(&data_mutex);
   pthread_mutex_unlock(&remove_mutex);
 }
 
@@ -749,6 +749,6 @@ void HypothesesSet::writeDimerMotifsFile(const char *fname) const
 
 HypothesesSet::~HypothesesSet()
 {
-  pthread_mutex_destroy(&mutex);
+  pthread_mutex_destroy(&data_mutex);
   pthread_mutex_destroy(&remove_mutex);
 }

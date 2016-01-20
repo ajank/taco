@@ -48,7 +48,7 @@ vector<PositionWeightMatrix>::iterator motifs_it;
 queue<pair<PositionWeightMatrix *, PositionWeightMatrix *> > motif_pair_scope;
 map<int, const NarrowPeak *> target_datasets_scope;
 list<HypothesesSet::Hypothesis>::iterator hypotheses_it;
-pthread_mutex_t mutex, cout_mutex;
+pthread_mutex_t data_mutex, cout_mutex;
 
 void readDatasets(Specification &spec)
 {
@@ -305,10 +305,10 @@ void *motifScanThread(void *arg)
 {
   while (true)
   {
-    pthread_mutex_lock(&mutex);
-    if (motifs_it == motifs.end()) { pthread_mutex_unlock(&mutex); return NULL; }
+    pthread_mutex_lock(&data_mutex);
+    if (motifs_it == motifs.end()) { pthread_mutex_unlock(&data_mutex); return NULL; }
     PositionWeightMatrix &par = *motifs_it++;
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&data_mutex);
 
     par.scan(fa, &control_dataset);
     pthread_mutex_lock(&cout_mutex);
@@ -323,11 +323,11 @@ void *experimentThread(void *arg)
 
   while (true)
   {
-    pthread_mutex_lock(&mutex);
-    if (motif_pair_scope.empty()) { pthread_mutex_unlock(&mutex); return NULL; }
+    pthread_mutex_lock(&data_mutex);
+    if (motif_pair_scope.empty()) { pthread_mutex_unlock(&data_mutex); return NULL; }
     pair<PositionWeightMatrix *, PositionWeightMatrix *> par = motif_pair_scope.front();
     motif_pair_scope.pop();
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&data_mutex);
 
     hs->processPair(par.first, par.second, target_datasets_scope, &control_dataset);
   }
@@ -339,10 +339,10 @@ void *postprocessThreadDimerMotifSimilarity(void *arg)
 
   while (true)
   {
-    pthread_mutex_lock(&mutex);
-    if (hypotheses_it == hs->hypotheses_end()) { pthread_mutex_unlock(&mutex); return NULL; }
+    pthread_mutex_lock(&data_mutex);
+    if (hypotheses_it == hs->hypotheses_end()) { pthread_mutex_unlock(&data_mutex); return NULL; }
     HypothesesSet::Hypothesis &par = *hypotheses_it++;
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&data_mutex);
 
     par.calculateDimerMotifSimilarity(fa, motifs, GC_content, hs->spec.Options.DimerMotifFlanks);
   }
@@ -354,10 +354,10 @@ void *postprocessThreadDimerMotif(void *arg)
 
   while (true)
   {
-    pthread_mutex_lock(&mutex);
-    if (hypotheses_it == hs->hypotheses_end()) { pthread_mutex_unlock(&mutex); return NULL; }
+    pthread_mutex_lock(&data_mutex);
+    if (hypotheses_it == hs->hypotheses_end()) { pthread_mutex_unlock(&data_mutex); return NULL; }
     HypothesesSet::Hypothesis &par = *hypotheses_it++;
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&data_mutex);
 
     par.calculateDimerMotif(fa, GC_content, hs->spec.Options.DimerMotifFlanks);
   }
@@ -385,7 +385,7 @@ int main(int argc, char *argv[])
   readDatasets(spec);
   readMotifs(spec);
 
-  pthread_mutex_init(&mutex, NULL);
+  pthread_mutex_init(&data_mutex, NULL);
   pthread_mutex_init(&cout_mutex, NULL);
   pthread_t *pth = new pthread_t[spec.Options.NumberOfThreads];
 
@@ -477,7 +477,7 @@ int main(int argc, char *argv[])
 
   delete[] pth;
   pthread_mutex_destroy(&cout_mutex);
-  pthread_mutex_destroy(&mutex);
+  pthread_mutex_destroy(&data_mutex);
 
   cout << endl << "Done! Thank you for using TACO." << endl;
   return 0;

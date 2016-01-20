@@ -106,7 +106,7 @@ class HypothesesSet
     vector<long int> log10_raw_p_value_dist;
 
     long int num_hypotheses, hypotheses_size, hypotheses_previous_size;
-    pthread_mutex_t mutex, remove_mutex;
+    pthread_mutex_t data_mutex, remove_mutex;
     list<Hypothesis> hypotheses;
 
     int num_clusters;
