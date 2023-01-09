@@ -234,9 +234,14 @@ void readMotifSubset(set<string> &subset, const char *fname)
 
 void fixMotifAccession(map<string, int> &accessions, PositionWeightMatrix &motif)
 {
-  if (accessions[motif.accession] > 0)
-    motif.accession += '_' + static_cast<ostringstream*>(&(ostringstream() << accessions[motif.accession]))->str();
-  accessions[motif.accession]++;
+  if (accessions.find(motif.accession) == accessions.end())
+    accessions[motif.accession] = 1;
+  else
+  {
+    stringstream ss;
+    ss << accessions[motif.accession]++;
+    motif.accession += '_' + ss.str();
+  }
 
   cout << "Motif " << motif.accession << ": id \"" << motif.id << "\", name \"" << motif.name << "\", " << motif.length << " bp, information content " << motif.inf_content << " bits" << endl;
 }
